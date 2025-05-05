@@ -1,5 +1,12 @@
 import reflex as rx
-from typing import Optional, TypedDict
+from typing import (
+    Optional,
+    TypedDict,
+    Union,
+    Dict,
+    List,
+    Tuple,
+)
 import logging
 from app.states.file_prep_state import (
     DEFAULT_README_TEXT,
@@ -20,35 +27,35 @@ class ProjectState(rx.State):
     """Manages project creation, selection, and associated data for the LTX Bench flow."""
 
     projects: list[str] = ["Default Project"]
-    selected_project: str | None = None
+    selected_project: Optional[str] = None
     new_project_name: str = ""
-    project_language_pairs: dict[
-        str, list[tuple[str, str]]
+    project_language_pairs: Dict[
+        str, List[Tuple[str, str]]
     ] = {"Default Project": []}
-    project_mt_engines: dict[str, list[str]] = {
+    project_mt_engines: Dict[str, List[str]] = {
         "Default Project": []
     }
-    project_readme_content: dict[str, str] = {
+    project_readme_content: Dict[str, str] = {
         "Default Project": DEFAULT_README_TEXT
     }
-    project_stakeholder_comments: dict[str, str] = {
+    project_stakeholder_comments: Dict[str, str] = {
         "Default Project": ""
     }
-    project_included_metrics: dict[str, MetricsConfig] = {
+    project_included_metrics: Dict[str, MetricsConfig] = {
         "Default Project": {
             "evergreen": list(EVERGREEN_METRICS.keys()),
             "custom": [],
         }
     }
-    project_metric_weights: dict[str, dict[str, int]] = {
+    project_metric_weights: Dict[str, Dict[str, int]] = {
         "Default Project": {
             metric: 5 for metric in EVERGREEN_METRICS
         }
     }
-    project_pass_threshold: dict[str, float | None] = {
+    project_pass_threshold: Dict[str, Optional[float]] = {
         "Default Project": None
     }
-    project_pass_definition: dict[str, str] = {
+    project_pass_definition: Dict[str, str] = {
         "Default Project": ""
     }
 
@@ -178,7 +185,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_pairs(
         self,
-    ) -> list[tuple[str, str]]:
+    ) -> List[Tuple[str, str]]:
         return (
             self.project_language_pairs.get(
                 self.selected_project, []
@@ -188,7 +195,7 @@ class ProjectState(rx.State):
         )
 
     @rx.var
-    def current_project_engines(self) -> list[str]:
+    def current_project_engines(self) -> List[str]:
         return (
             self.project_mt_engines.get(
                 self.selected_project, []
@@ -220,7 +227,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_metrics_config(
         self,
-    ) -> MetricsConfig | None:
+    ) -> Optional[MetricsConfig]:
         return (
             self.project_included_metrics.get(
                 self.selected_project, None
@@ -232,7 +239,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_metric_weights(
         self,
-    ) -> dict[str, int] | None:
+    ) -> Optional[Dict[str, int]]:
         return (
             self.project_metric_weights.get(
                 self.selected_project, None
@@ -244,7 +251,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_pass_threshold(
         self,
-    ) -> float | None:
+    ) -> Optional[float]:
         return (
             self.project_pass_threshold.get(
                 self.selected_project, None
