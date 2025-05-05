@@ -32,80 +32,93 @@ class CustomMetric(TypedDict):
     definition: str
 
 
-class ExcelColumn(TypedDict):
+class ExcelColumn(TypedDict, total=False):
     name: str
     id: str
     required: bool
     editable: bool
+    metric_source: bool
+    original_index: Optional[int]
 
 
-DEFAULT_EXCEL_COLUMNS: List[ExcelColumn] = [
-    ExcelColumn(
-        name="File Name",
-        id="file_name",
-        required=True,
-        editable=False,
-    ),
-    ExcelColumn(
-        name="Source",
-        id="source",
-        required=True,
-        editable=False,
-    ),
-    ExcelColumn(
-        name="Target",
-        id="target",
-        required=True,
-        editable=False,
-    ),
-    ExcelColumn(
-        name="Word Count",
-        id="word_count",
-        required=False,
-        editable=True,
-    ),
-    ExcelColumn(
-        name="Pre-Eval",
-        id="pre_eval",
-        required=True,
-        editable=True,
-    ),
-    ExcelColumn(
-        name="Applicable Word Count",
-        id="applicable_word_count",
-        required=False,
-        editable=True,
-    ),
-    ExcelColumn(
-        name="Overall",
-        id="overall",
-        required=True,
-        editable=True,
-    ),
-    ExcelColumn(
-        name="Rating (Not Weighted)",
-        id="rating_not_weighted",
-        required=True,
-        editable=False,
-    ),
-    ExcelColumn(
-        name="Rating (Weighted)",
-        id="rating_weighted",
-        required=True,
-        editable=False,
-    ),
-    ExcelColumn(
-        name="Weighted Rating Length",
-        id="weighted_rating_length",
-        required=False,
-        editable=True,
-    ),
-    ExcelColumn(
-        name="Additional Notes",
-        id="additional_notes",
-        required=False,
-        editable=True,
-    ),
+DEFAULT_EXCEL_COLUMNS_DATA: List[Dict] = [
+    {
+        "name": "File Name",
+        "id": "file_name",
+        "required": True,
+        "editable": False,
+        "metric_source": False,
+    },
+    {
+        "name": "Source",
+        "id": "source",
+        "required": True,
+        "editable": False,
+        "metric_source": False,
+    },
+    {
+        "name": "Target",
+        "id": "target",
+        "required": True,
+        "editable": False,
+        "metric_source": False,
+    },
+    {
+        "name": "Word Count",
+        "id": "word_count",
+        "required": False,
+        "editable": True,
+        "metric_source": False,
+    },
+    {
+        "name": "Pre-Eval",
+        "id": "pre_eval",
+        "required": True,
+        "editable": True,
+        "metric_source": False,
+    },
+    {
+        "name": "Applicable Word Count",
+        "id": "applicable_word_count",
+        "required": False,
+        "editable": True,
+        "metric_source": False,
+    },
+    {
+        "name": "Overall",
+        "id": "overall",
+        "required": True,
+        "editable": True,
+        "metric_source": False,
+    },
+    {
+        "name": "Rating (Not Weighted)",
+        "id": "rating_not_weighted",
+        "required": True,
+        "editable": False,
+        "metric_source": False,
+    },
+    {
+        "name": "Rating (Weighted)",
+        "id": "rating_weighted",
+        "required": True,
+        "editable": False,
+        "metric_source": False,
+    },
+    {
+        "name": "Weighted Rating Length",
+        "id": "weighted_rating_length",
+        "required": False,
+        "editable": True,
+        "metric_source": False,
+    },
+    {
+        "name": "Additional Notes",
+        "id": "additional_notes",
+        "required": False,
+        "editable": True,
+        "metric_source": False,
+    },
 ]
 
 
@@ -153,9 +166,19 @@ class FilePrepState(rx.State):
     metrics_confirmed: bool = False
     pass_threshold: float | None = None
     pass_definition: str = ""
-    excel_columns: list[ExcelColumn] = DEFAULT_EXCEL_COLUMNS
+    excel_columns: list[ExcelColumn] = [
+        ExcelColumn(
+            name=col["name"],
+            id=col["id"],
+            required=col["required"],
+            editable=col["editable"],
+            metric_source=col["metric_source"],
+        )
+        for col in DEFAULT_EXCEL_COLUMNS_DATA
+        if not col.get("metric_source", False)
+    ]
     columns_confirmed: bool = False
-    editing_column_index: Optional[int] = None
+    editing_column_id: Optional[str] = None
     editing_column_name: str = ""
 
     @rx.event
@@ -593,12 +616,36 @@ class FilePrepState(rx.State):
         ] = self.pass_definition
         self.metrics_confirmed = True
         self._reset_downstream_of_metrics()
-        self.excel_columns = list(
+        saved_cols = (
             project_state.project_excel_columns.get(
-                project_name, DEFAULT_EXCEL_COLUMNS
+                project_name,
+                [
+                    ExcelColumn(
+                        name=col["name"],
+                        id=col["id"],
+                        required=col["required"],
+                        editable=col["editable"],
+                        metric_source=col["metric_source"],
+                    )
+                    for col in DEFAULT_EXCEL_COLUMNS_DATA
+                    if not col.get("metric_source", False)
+                ],
             )
         )
-        self.editing_column_index = None
+        self.excel_columns = [
+            ExcelColumn(
+                name=col["name"],
+                id=col["id"],
+                required=col["required"],
+                editable=col["editable"],
+                metric_source=col.get(
+                    "metric_source", False
+                ),
+            )
+            for col in saved_cols
+            if not col.get("metric_source", False)
+        ]
+        self.editing_column_id = None
         self.editing_column_name = ""
         yield rx.toast(
             "Metrics, Weights & Pass Criteria Confirmed! Define Excel Columns next.",
@@ -607,46 +654,67 @@ class FilePrepState(rx.State):
 
     @rx.event
     def move_column(
-        self, index: int, direction: Literal["up", "down"]
+        self,
+        column_id: str,
+        direction: Literal["left", "right"],
     ):
-        """Moves a column up or down in the list."""
+        """Moves a column left or right in the user-manageable list."""
+        try:
+            index = next(
+                (
+                    i
+                    for i, col in enumerate(
+                        self.excel_columns
+                    )
+                    if col["id"] == column_id
+                )
+            )
+        except StopIteration:
+            yield rx.toast(
+                f"Error: Column with ID '{column_id}' not found for moving.",
+                duration=3000,
+            )
+            return
         cols = list(self.excel_columns)
-        if direction == "up" and index > 0:
+        if direction == "left" and index > 0:
             new_index = index - 1
             cols.insert(new_index, cols.pop(index))
             self.excel_columns = cols
-            if self.editing_column_index == index:
-                self.editing_column_index = None
+            if self.editing_column_id == column_id:
+                self.editing_column_id = None
                 self.editing_column_name = ""
-            elif self.editing_column_index == new_index:
-                self.editing_column_index = index
-        elif direction == "down" and index < len(cols) - 1:
+        elif direction == "right" and index < len(cols) - 1:
             new_index = index + 1
             cols.insert(new_index, cols.pop(index))
             self.excel_columns = cols
-            if self.editing_column_index == index:
-                self.editing_column_index = None
+            if self.editing_column_id == column_id:
+                self.editing_column_id = None
                 self.editing_column_name = ""
-            elif self.editing_column_index == new_index:
-                self.editing_column_index = index
 
     @rx.event
-    def start_editing_column_name(self, index: int):
-        """Starts editing a column name."""
-        if 0 <= index < len(self.excel_columns):
-            if self.excel_columns[index]["editable"]:
-                self.editing_column_index = index
-                self.editing_column_name = (
-                    self.excel_columns[index]["name"]
+    def start_editing_column_name(self, column_id: str):
+        """Starts editing a column name using its ID."""
+        try:
+            column_to_edit = next(
+                (
+                    col
+                    for col in self.excel_columns
+                    if col["id"] == column_id
                 )
+            )
+            if column_to_edit["editable"]:
+                self.editing_column_id = column_id
+                self.editing_column_name = column_to_edit[
+                    "name"
+                ]
             else:
                 yield rx.toast(
                     "This column name cannot be edited.",
                     duration=2000,
                 )
-        else:
+        except StopIteration:
             yield rx.toast(
-                "Invalid column index for editing.",
+                f"Invalid column ID '{column_id}' for editing.",
                 duration=3000,
             )
 
@@ -657,59 +725,70 @@ class FilePrepState(rx.State):
 
     @rx.event
     def save_column_name(self):
-        """Saves the edited column name."""
-        if (
-            self.editing_column_index is not None
-            and 0
-            <= self.editing_column_index
-            < len(self.excel_columns)
-        ):
-            new_name = self.editing_column_name.strip()
-            original_name = self.excel_columns[
-                self.editing_column_index
-            ]["name"]
-            if not new_name:
+        """Saves the edited column name using the stored ID."""
+        if self.editing_column_id is None:
+            return
+        try:
+            index_to_edit = next(
+                (
+                    i
+                    for i, col in enumerate(
+                        self.excel_columns
+                    )
+                    if col["id"] == self.editing_column_id
+                )
+            )
+        except StopIteration:
+            yield rx.toast(
+                f"Error saving: Column ID '{self.editing_column_id}' not found.",
+                duration=3000,
+            )
+            self.editing_column_id = None
+            self.editing_column_name = ""
+            return
+        new_name = self.editing_column_name.strip()
+        original_name = self.excel_columns[index_to_edit][
+            "name"
+        ]
+        if not new_name:
+            yield rx.toast(
+                "Column name cannot be empty.",
+                duration=3000,
+            )
+            return
+        if new_name != original_name:
+            if any(
+                (
+                    col["name"] == new_name
+                    and col["id"] != self.editing_column_id
+                    for col in self.excel_columns
+                )
+            ):
                 yield rx.toast(
-                    "Column name cannot be empty.",
+                    f"Column name '{new_name}' already exists.",
                     duration=3000,
                 )
                 return
-            if new_name != original_name:
-                if any(
-                    (
-                        col["name"] == new_name
-                        and i != self.editing_column_index
-                        for i, col in enumerate(
-                            self.excel_columns
-                        )
-                    )
-                ):
-                    yield rx.toast(
-                        f"Column name '{new_name}' already exists.",
-                        duration=3000,
-                    )
-                    return
-            self.excel_columns[self.editing_column_index][
-                "name"
-            ] = new_name
-            self.editing_column_index = None
-            self.editing_column_name = ""
-        else:
-            self.editing_column_index = None
-            self.editing_column_name = ""
+        temp_cols = [
+            col.copy() for col in self.excel_columns
+        ]
+        temp_cols[index_to_edit]["name"] = new_name
+        self.excel_columns = temp_cols
+        self.editing_column_id = None
+        self.editing_column_name = ""
 
     @rx.event
     def cancel_editing_column_name(self):
         """Cancels editing a column name."""
-        self.editing_column_index = None
+        self.editing_column_id = None
         self.editing_column_name = ""
 
     @rx.event
     async def confirm_columns(self):
-        """Confirms the column configuration."""
+        """Confirms the user-manageable column configuration."""
         from app.states.project_state import ProjectState
 
-        if self.editing_column_index is not None:
+        if self.editing_column_id is not None:
             yield rx.toast(
                 "Please finish editing the column name first (Save or Cancel).",
                 duration=3000,
@@ -723,9 +802,19 @@ class FilePrepState(rx.State):
             )
             return
         project_name = project_state.selected_project
+        columns_to_save = [
+            ExcelColumn(
+                name=col["name"],
+                id=col["id"],
+                required=col["required"],
+                editable=col["editable"],
+                metric_source=col["metric_source"],
+            )
+            for col in self.excel_columns
+        ]
         project_state.project_excel_columns[
             project_name
-        ] = list(self.excel_columns)
+        ] = columns_to_save
         self.columns_confirmed = True
         yield rx.toast(
             "Excel Columns Confirmed! Configuration complete.",
@@ -778,9 +867,19 @@ class FilePrepState(rx.State):
         self.pass_definition = ""
 
     def _reset_column_state(self):
-        """Resets column state to default."""
-        self.excel_columns = DEFAULT_EXCEL_COLUMNS
-        self.editing_column_index = None
+        """Resets user-manageable column state to default."""
+        self.excel_columns = [
+            ExcelColumn(
+                name=col["name"],
+                id=col["id"],
+                required=col["required"],
+                editable=col["editable"],
+                metric_source=col["metric_source"],
+            )
+            for col in DEFAULT_EXCEL_COLUMNS_DATA
+            if not col.get("metric_source", False)
+        ]
+        self.editing_column_id = None
         self.editing_column_name = ""
 
     def _load_project_data_after_engines(
@@ -804,8 +903,20 @@ class FilePrepState(rx.State):
             self.readme_choice = "default"
         elif not saved_readme.strip():
             self.readme_choice = "new"
+            self.custom_readme_content = ""
         else:
-            self.readme_choice = "customize"
+            import re
+
+            default_cleaned = re.sub(
+                "\\s+", " ", self.default_readme
+            ).strip()
+            saved_cleaned = re.sub(
+                "\\s+", " ", saved_readme
+            ).strip()
+            if saved_cleaned == default_cleaned:
+                self.readme_choice = "default"
+            else:
+                self.readme_choice = "customize"
         self.stakeholder_comments = (
             project_state.project_stakeholder_comments.get(
                 project_name, ""
@@ -839,9 +950,16 @@ class FilePrepState(rx.State):
                     "evergreen", EVERGREEN_METRICS.keys()
                 )
             )
-            self.custom_metrics = list(
-                saved_metrics_config.get("custom", [])
+            saved_custom = saved_metrics_config.get(
+                "custom", []
             )
+            self.custom_metrics = [
+                CustomMetric(
+                    name=cm["name"],
+                    definition=cm["definition"],
+                )
+                for cm in saved_custom
+            ]
             loaded_weights = dict(saved_weights)
             current_weights = {}
             all_metric_names_to_load = (
@@ -850,9 +968,13 @@ class FilePrepState(rx.State):
             )
             for name in all_metric_names_to_load:
                 weight = loaded_weights.get(name, 5)
-                if not 1 <= weight <= 10:
-                    weight = 5
-                current_weights[name] = weight
+                try:
+                    weight_int = int(weight)
+                    if not 1 <= weight_int <= 10:
+                        weight_int = 5
+                except (ValueError, TypeError):
+                    weight_int = 5
+                current_weights[name] = weight_int
             self.metric_weights = current_weights
         else:
             self._reset_metric_and_pass_state()
@@ -866,15 +988,36 @@ class FilePrepState(rx.State):
                 project_name, ""
             )
         )
-        saved_columns = (
+        saved_columns_raw = (
             project_state.project_excel_columns.get(
-                project_name, DEFAULT_EXCEL_COLUMNS
+                project_name,
+                [
+                    ExcelColumn(
+                        name=col["name"],
+                        id=col["id"],
+                        required=col["required"],
+                        editable=col["editable"],
+                        metric_source=col["metric_source"],
+                    )
+                    for col in DEFAULT_EXCEL_COLUMNS_DATA
+                    if not col.get("metric_source", False)
+                ],
             )
         )
         self.excel_columns = [
-            col.copy() for col in saved_columns
+            ExcelColumn(
+                name=col["name"],
+                id=col["id"],
+                required=col["required"],
+                editable=col["editable"],
+                metric_source=col.get(
+                    "metric_source", False
+                ),
+            )
+            for col in saved_columns_raw
+            if not col.get("metric_source", False)
         ]
-        self.editing_column_index = None
+        self.editing_column_id = None
         self.editing_column_name = ""
 
     @rx.event
@@ -989,13 +1132,25 @@ class FilePrepState(rx.State):
             if metric_name not in self.metric_weights:
                 return True
             weight = self.metric_weights[metric_name]
-            if not 1 <= weight <= 10:
+            if (
+                not isinstance(weight, int)
+                or not 1 <= weight <= 10
+            ):
                 return True
+        if self.pass_threshold is not None and (
+            not self.pass_definition.strip()
+        ):
+            return True
+        if (
+            self.pass_definition.strip()
+            and self.pass_threshold is None
+        ):
+            return True
         return False
 
     @rx.var
     def is_confirm_columns_disabled(self) -> bool:
-        return self.editing_column_index is not None
+        return self.editing_column_id is not None
 
     @rx.var
     def final_readme_content(self) -> str:
@@ -1003,6 +1158,10 @@ class FilePrepState(rx.State):
         if self.readme_choice == "default":
             return self.default_readme
         elif self.readme_choice in ["customize", "new"]:
+            if self.readme_choice == "new" and (
+                not self.custom_readme_content.strip()
+            ):
+                return ""
             return self.custom_readme_content
         return self.default_readme
 
@@ -1032,17 +1191,96 @@ class FilePrepState(rx.State):
 
     @rx.var
     def total_metric_weight(self) -> int:
-        """Calculates the sum of weights for all currently included metrics that have weights."""
+        """Calculates the sum of weights for all currently included metrics that have valid weights."""
         total = 0
-        included_names_with_weights = (
-            self.metric_weights.keys()
-        )
         all_included_metric_names = [
             m["name"] for m in self.all_included_metrics
         ]
         for name in all_included_metric_names:
-            if name in included_names_with_weights:
-                weight = self.metric_weights.get(name, 0)
-                if 1 <= weight <= 10:
-                    total += weight
+            weight = self.metric_weights.get(name)
+            if (
+                isinstance(weight, int)
+                and 1 <= weight <= 10
+            ):
+                total += weight
         return total
+
+    @rx.var
+    def display_excel_columns(self) -> list[ExcelColumn]:
+        """Combines user-managed columns with dynamically added metric columns for display."""
+        combined_cols: List[ExcelColumn] = []
+        for i, col_data in enumerate(self.excel_columns):
+            new_col: ExcelColumn = {
+                "name": col_data.get("name", ""),
+                "id": col_data.get("id", ""),
+                "required": col_data.get("required", False),
+                "editable": col_data.get("editable", False),
+                "metric_source": col_data.get(
+                    "metric_source", False
+                ),
+                "original_index": i,
+            }
+            combined_cols.append(new_col)
+        metric_columns_to_add: List[ExcelColumn] = []
+        for metric_info in self.all_included_metrics:
+            metric_name = metric_info["name"]
+            metric_columns_to_add.append(
+                ExcelColumn(
+                    name=metric_name,
+                    id=f"metric_{metric_name.lower().replace(' ', '_')}",
+                    required=True,
+                    editable=False,
+                    metric_source=True,
+                    original_index=None,
+                )
+            )
+        insert_after_id = "overall"
+        insert_index = -1
+        for i, col in enumerate(combined_cols):
+            if col["id"] == insert_after_id:
+                insert_index = i + 1
+                break
+        if insert_index != -1:
+            combined_cols[insert_index:insert_index] = (
+                metric_columns_to_add
+            )
+        else:
+            pre_eval_index = -1
+            for i, col in enumerate(combined_cols):
+                if col["id"] == "pre_eval":
+                    pre_eval_index = i + 1
+                    break
+            if pre_eval_index != -1:
+                combined_cols[
+                    pre_eval_index:pre_eval_index
+                ] = metric_columns_to_add
+            else:
+                rating_index = -1
+                for i, col in enumerate(combined_cols):
+                    if col["id"] == "rating_not_weighted":
+                        rating_index = i
+                        break
+                if rating_index != -1:
+                    combined_cols[
+                        rating_index:rating_index
+                    ] = metric_columns_to_add
+                else:
+                    first_rating_or_notes_index = len(
+                        combined_cols
+                    )
+                    for i, col in reversed(
+                        list(enumerate(combined_cols))
+                    ):
+                        if col["id"] in [
+                            "rating_not_weighted",
+                            "rating_weighted",
+                            "weighted_rating_length",
+                            "additional_notes",
+                        ]:
+                            first_rating_or_notes_index = i
+                        else:
+                            break
+                    combined_cols[
+                        first_rating_or_notes_index:first_rating_or_notes_index
+                    ] = metric_columns_to_add
+        return combined_cols

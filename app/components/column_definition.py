@@ -3,19 +3,27 @@ from app.states.file_prep_state import (
     FilePrepState,
     ExcelColumn,
 )
-from typing import Dict
+from typing import Optional
 
 
-def column_item(
-    column: ExcelColumn, index: int
-) -> rx.Component:
-    """Displays a single column item with controls for reordering and editing."""
-    is_editing = FilePrepState.editing_column_index == index
-    is_first = index == 0
-    is_last = (
-        index == FilePrepState.excel_columns.length() - 1
+def column_item(column: ExcelColumn) -> rx.Component:
+    """Displays a single column item horizontally as a card."""
+    is_editing = (
+        FilePrepState.editing_column_id == column["id"]
     )
-    return rx.el.li(
+    original_index_var = column["original_index"]
+    is_editable_with_index = column["editable"] & (
+        original_index_var != None
+    )
+    is_first = is_editable_with_index & (
+        original_index_var == 0
+    )
+    is_last = is_editable_with_index & (
+        original_index_var
+        == FilePrepState.excel_columns.length() - 1
+    )
+    can_trigger_edit = column["editable"]
+    return rx.el.div(
         rx.el.div(
             rx.cond(
                 is_editing,
@@ -34,87 +42,112 @@ def column_item(
                             ),
                         ),
                         placeholder="Enter column name",
-                        class_name="p-1 border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow",
+                        class_name="p-1 border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow text-sm",
                         auto_focus=True,
                     ),
                     rx.el.button(
-                        rx.icon(tag="check"),
+                        rx.icon(tag="check", size=16),
                         on_click=FilePrepState.save_column_name,
-                        class_name="ml-1 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600",
+                        class_name="ml-1 px-1.5 py-1 bg-green-500 text-white rounded hover:bg-green-600",
+                        size="1",
                     ),
                     rx.el.button(
-                        rx.icon(tag="x"),
+                        rx.icon(tag="x", size=16),
                         on_click=FilePrepState.cancel_editing_column_name,
-                        class_name="ml-1 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600",
+                        class_name="ml-1 px-1.5 py-1 bg-red-500 text-white rounded hover:bg-red-600",
+                        size="1",
                     ),
                     class_name="flex items-center w-full",
                 ),
                 rx.el.span(
                     column["name"],
-                    class_name="font-medium text-gray-800 flex-grow",
-                    on_double_click=lambda: FilePrepState.start_editing_column_name(
-                        index
+                    class_name=rx.cond(
+                        can_trigger_edit,
+                        "font-medium text-gray-800 text-sm cursor-pointer hover:text-blue-600",
+                        "font-medium text-gray-600 text-sm italic",
+                    ),
+                    on_double_click=rx.cond(
+                        can_trigger_edit,
+                        FilePrepState.start_editing_column_name(
+                            column["id"]
+                        ),
+                        rx.noop(),
                     ),
                 ),
             ),
-            class_name="flex-1 min-w-0 mr-4",
+            class_name="flex-1 min-w-0 mb-2 pb-2 border-b border-gray-200",
         ),
         rx.el.div(
             rx.cond(
-                ~is_editing,
+                ~is_editing & is_editable_with_index,
                 rx.fragment(
                     rx.el.button(
-                        rx.icon(tag="chevron-up"),
+                        rx.icon(
+                            tag="chevron-left", size=16
+                        ),
                         on_click=lambda: FilePrepState.move_column(
-                            index, "up"
+                            column["id"], "left"
                         ),
                         disabled=is_first,
                         class_name="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed",
+                        size="1",
                     ),
                     rx.el.button(
-                        rx.icon(tag="chevron-down"),
+                        rx.icon(tag="pencil", size=16),
+                        on_click=lambda: FilePrepState.start_editing_column_name(
+                            column["id"]
+                        ),
+                        class_name="p-1 text-blue-500 hover:text-blue-700",
+                        size="1",
+                    ),
+                    rx.el.button(
+                        rx.icon(
+                            tag="chevron-right", size=16
+                        ),
                         on_click=lambda: FilePrepState.move_column(
-                            index, "down"
+                            column["id"], "right"
                         ),
                         disabled=is_last,
                         class_name="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed",
-                    ),
-                    rx.cond(
-                        column["editable"],
-                        rx.el.button(
-                            rx.icon(tag="pencil"),
-                            on_click=lambda: FilePrepState.start_editing_column_name(
-                                index
-                            ),
-                            class_name="ml-2 p-1 text-blue-500 hover:text-blue-700",
-                        ),
-                        rx.fragment(),
+                        size="1",
                     ),
                 ),
                 rx.fragment(),
             ),
-            class_name="flex items-center",
+            class_name="flex items-center justify-between h-8",
         ),
-        class_name="flex justify-between items-center p-3 border-b border-gray-200 last:border-b-0 bg-white hover:bg-gray-50",
+        class_name=rx.cond(
+            column["metric_source"],
+            "flex-shrink-0 w-40 h-24 p-3 border border-dashed border-green-400 rounded bg-green-50 shadow flex flex-col justify-between",
+            "flex-shrink-0 w-40 h-24 p-3 border border-gray-300 rounded bg-white shadow flex flex-col justify-between",
+        ),
     )
 
 
 def column_definition_component() -> rx.Component:
-    """Component for defining and ordering Excel columns."""
+    """Component for defining and ordering Excel columns horizontally."""
     return rx.el.div(
         rx.el.h4(
             "Define Excel Export Columns",
-            class_name="text-xl font-medium mb-4 text-gray-700",
+            class_name="text-xl font-medium mb-2 text-gray-700",
         ),
         rx.el.p(
-            "Arrange and rename the columns for the evaluation Excel file. Double-click an editable name to change it.",
-            class_name="text-sm text-gray-600 mb-6",
+            "Arrange the standard columns using arrows. Double-click a standard column name to edit it.",
+            class_name="text-sm text-gray-600 mb-1",
         ),
-        rx.el.ul(
-            rx.foreach(
-                FilePrepState.excel_columns, column_item
+        rx.el.p(
+            "Metric columns (dashed green border) are added automatically based on the previous step and cannot be moved or edited here.",
+            class_name="text-xs text-gray-500 mb-6 italic",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.foreach(
+                    FilePrepState.display_excel_columns,
+                    column_item,
+                ),
+                class_name="flex space-x-4 p-2",
             ),
-            class_name="list-none p-0 mb-6 border border-gray-200 rounded shadow-sm max-h-96 overflow-y-auto",
+            class_name="mb-6 border border-gray-200 rounded shadow-sm bg-gray-100 overflow-x-auto",
         ),
         rx.el.div(
             rx.el.button(

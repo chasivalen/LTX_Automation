@@ -13,7 +13,7 @@ from app.states.file_prep_state import (
     EVERGREEN_METRICS,
     CustomMetric,
     ExcelColumn,
-    DEFAULT_EXCEL_COLUMNS,
+    DEFAULT_EXCEL_COLUMNS_DATA,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +23,20 @@ logger = logging.getLogger(__name__)
 class MetricsConfig(TypedDict):
     evergreen: list[str]
     custom: list[CustomMetric]
+
+
+def get_default_user_excel_columns() -> List[ExcelColumn]:
+    return [
+        ExcelColumn(
+            name=col["name"],
+            id=col["id"],
+            required=col["required"],
+            editable=col["editable"],
+            metric_source=col["metric_source"],
+        )
+        for col in DEFAULT_EXCEL_COLUMNS_DATA
+        if not col.get("metric_source", False)
+    ]
 
 
 class ProjectState(rx.State):
@@ -61,7 +75,7 @@ class ProjectState(rx.State):
         "Default Project": ""
     }
     project_excel_columns: Dict[str, List[ExcelColumn]] = {
-        "Default Project": list(DEFAULT_EXCEL_COLUMNS)
+        "Default Project": get_default_user_excel_columns()
     }
 
     def _initialize_project_data(self, project_name: str):
@@ -98,8 +112,8 @@ class ProjectState(rx.State):
         if project_name not in self.project_pass_definition:
             self.project_pass_definition[project_name] = ""
         if project_name not in self.project_excel_columns:
-            self.project_excel_columns[project_name] = list(
-                DEFAULT_EXCEL_COLUMNS
+            self.project_excel_columns[project_name] = (
+                get_default_user_excel_columns()
             )
 
     @rx.event
@@ -116,7 +130,9 @@ class ProjectState(rx.State):
             project_name
             and project_name not in self.projects
         ):
-            self.projects.append(project_name)
+            temp_projects = self.projects.copy()
+            temp_projects.append(project_name)
+            self.projects = temp_projects
             self.selected_project = project_name
             self._initialize_project_data(project_name)
             self.new_project_name = ""
@@ -196,8 +212,10 @@ class ProjectState(rx.State):
         self,
     ) -> List[Tuple[str, str]]:
         return (
-            self.project_language_pairs.get(
-                self.selected_project, []
+            list(
+                self.project_language_pairs.get(
+                    self.selected_project, []
+                )
             )
             if self.selected_project
             else []
@@ -206,8 +224,10 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_engines(self) -> List[str]:
         return (
-            self.project_mt_engines.get(
-                self.selected_project, []
+            list(
+                self.project_mt_engines.get(
+                    self.selected_project, []
+                )
             )
             if self.selected_project
             else []
@@ -237,25 +257,27 @@ class ProjectState(rx.State):
     def current_project_metrics_config(
         self,
     ) -> Optional[MetricsConfig]:
-        return (
+        config = (
             self.project_included_metrics.get(
-                self.selected_project, None
+                self.selected_project
             )
             if self.selected_project
             else None
         )
+        return config.copy() if config else None
 
     @rx.var
     def current_project_metric_weights(
         self,
     ) -> Optional[Dict[str, int]]:
-        return (
+        weights = (
             self.project_metric_weights.get(
-                self.selected_project, None
+                self.selected_project
             )
             if self.selected_project
             else None
         )
+        return weights.copy() if weights else None
 
     @rx.var
     def current_project_pass_threshold(
@@ -283,10 +305,13 @@ class ProjectState(rx.State):
     def current_project_excel_columns(
         self,
     ) -> List[ExcelColumn]:
-        return list(
+        """Gets the user-manageable columns for the current project (without original_index)."""
+        default_cols = get_default_user_excel_columns()
+        cols = (
             self.project_excel_columns.get(
-                self.selected_project, DEFAULT_EXCEL_COLUMNS
+                self.selected_project, default_cols
             )
             if self.selected_project
-            else DEFAULT_EXCEL_COLUMNS
+            else default_cols
         )
+        return list(cols)

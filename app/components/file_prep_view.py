@@ -96,7 +96,7 @@ def mt_project_view() -> rx.Component:
                                                             ),
                                                             rx.el.ol(
                                                                 rx.foreach(
-                                                                    FilePrepState.excel_columns,
+                                                                    FilePrepState.display_excel_columns,
                                                                     lambda col, index: rx.el.li(
                                                                         f"{index + 1}. {col['name']}",
                                                                         class_name="text-sm p-1",
