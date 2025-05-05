@@ -11,7 +11,7 @@ Language = Literal[
     "Chinese",
 ]
 ReadmeChoice = Literal["default", "customize", "new"]
-DEFAULT_README_TEXT = '1. Please read through READ ME tab before you kick off the Evaluation Task:\na. Check out the Metrics and their corresponding Definitions & Notes to understand what aspects of the language performance you are evaluating against;\nb. Check out the Scoring Definition section to understand how you should be scoring each segment from a range of 1 to 5;\nc. The Weights/Percentage section is for your reference as to how much each metric is valued for this specific project.\n\n2. Once you are done reading through the READ ME tab, please move on to the Part 1 tabs to start the actual evaluation task. \n\n3. Pre-Eval: Before you start evaluating a segment, please take a quick look at both the SOURCE and TARGET columns, and:\na.If you find the source quality of a segment in SOURCE Column too terrible to understand, please choose Incomprehensible Input from the dropdown list of Pre-Eval column and skip the evaluation of this segment;\nb. If you find that the content in TARGET Column is not the translation of source, please choose Irrelevant Target from the dropdown list and score 0.9 under every metric for this segment.\n\n4. If you don\'t see a big issue with either the SOURCE or TARGET, please start evaluating the segment from TARGET column\na. First give an overall score (1 to 5) for the whole segment under the "Overall" Column;\nb. Then evaluate per metric with a scoring range from 1 to 5;\nc. Metrics are divided into “Evergreen” and “Customized”, so please make sure to score all of them;\nd. Please score each metric based on the overall performance in this aspect according to the scoring definition; \ne. If a translation issue has an impact on more than one metric, please penalize it accordingly in multiple metrics as needed.\n\n5. Overall Rating will be automatically calculated with pre-filled formulas in both non-weighted and weighted forms, so please don’t touch any of the RATING Columns.\n'
+DEFAULT_README_TEXT = "1. Please read through READ ME tab before you kick off the Evaluation Task:\na. Check out the Metrics and their corresponding Definitions & Notes to understand what aspects of the language performance you are evaluating against;\nb. Check out the Scoring Definition section to understand how you should be scoring each segment from a range of 1 to 5;\nc. The Weights/Percentage section is for your reference as to how much each metric is valued for this specific project.\n\n2. Once you are done reading through the READ ME tab, please move on to the Part 1 tabs to start the actual evaluation task. \n\n3. Pre-Eval: Before you start evaluating a segment, please take a quick look at both the SOURCE and TARGET columns, and:\na.If you find the source quality of a segment in SOURCE Column too terrible to understand, please choose Incomprehensible Input from the dropdown list of Pre-Eval column and skip the evaluation of this segment;\nb. If you find that the content in TARGET Column is not the translation of source, please choose Irrelevant Target from the dropdown list and score 0.9 under every metric for this segment.\n\n4. If you don't see a big issue with either the SOURCE or TARGET, please start evaluating the segment from TARGET column\na. First give an overall score (1 to 5) for the whole segment under the \"Overall\" Column;\nb. Then evaluate per metric with a scoring range from 1 to 5;\nc. Metrics are divided into “Evergreen” and “Customized”, so please make sure to score all of them;\nd. Please score each metric based on the overall performance in this aspect according to the scoring definition; \ne. If a translation issue has an impact on more than one metric, please penalize it accordingly in multiple metrics as needed.\n\n5. Overall Rating will be automatically calculated with pre-filled formulas in both non-weighted and weighted forms, so please don’t touch any of the RATING Columns.\n\n6. If you have any comments for the segment, you could leave them under the Additional Notes Column\n\n7. After completing the rating work for Part 1, please review the entire section again to check for any cells with a yellow background. If a cell has a yellow background, it's possible that you have either forgotten to add a rating or entered an invalid rating value.\n\n8. With the evaluation done, all relevant data will be automatically pulled to Part 2 - Data Analysis tab for data analysis in both numbers and visuals formats, and comparison will be available if evaluation is done on multiple tools.\n\n9. Based on data displayed in Part 2 - Data Analysis tab, please provide your take on the performance of each tool included in the Data Analysis Summary at the top of the tab, and make sure to answer all questions listed to be thorough.\n\n10. In Part 3 - Criteria Based Assess tab, please provide comments to questions regarding criteria specific to the project and your overall summary for you locale, so that the Project Lead can incorporate your opinions into the final Report.\n\n11. Once you are done with the whole process, please rename your file by adding the Completion Date and Your name.\n"
 
 
 class FilePrepState(rx.State):
@@ -249,16 +249,19 @@ class FilePrepState(rx.State):
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
+            saved_readme = self.custom_readme_content
             if (
-                not self.custom_readme_content.strip()
-                or self.custom_readme_content
-                == self.default_readme
+                not saved_readme.strip()
+                or saved_readme == self.default_readme
             ):
                 self.custom_readme_content = (
                     self.default_readme
                 )
+            else:
+                self.custom_readme_content = saved_readme
         elif choice == "new":
-            self.custom_readme_content = ""
+            if self.custom_readme_content.strip():
+                self.custom_readme_content = ""
 
     @rx.event
     def set_custom_readme_content(self, content: str):
@@ -296,7 +299,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     def reset_state(self):
-        """Resets the FilePrepState to its initial values."""
+        """Resets the FilePrepState to its initial values, using default readme."""
         self.current_source_language = None
         self.current_target_language = None
         self.selected_pairs_for_session = []
@@ -305,8 +308,9 @@ class FilePrepState(rx.State):
         self.new_engine_name = ""
         self.engines_confirmed = False
         self.readme_choice = None
-        self.custom_readme_content = self.default_readme
+        self.custom_readme_content = DEFAULT_README_TEXT
         self.readme_confirmed = False
+        self.default_readme = DEFAULT_README_TEXT
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
@@ -332,11 +336,6 @@ class FilePrepState(rx.State):
     def set_readme_confirmed(self, confirmed: bool):
         """Allows editing ReadMe again."""
         self.readme_confirmed = confirmed
-        if (
-            not confirmed
-            and self.readme_choice != "default"
-        ):
-            pass
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
