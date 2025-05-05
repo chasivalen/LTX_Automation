@@ -4,6 +4,9 @@ from app.states.file_prep_state import FilePrepState
 from app.components.language_pair_selector import (
     language_pair_selector,
 )
+from app.components.engine_selector import (
+    engine_selector_component,
+)
 
 
 def project_type_button(text: ProjectType) -> rx.Component:
@@ -22,32 +25,52 @@ def project_type_button(text: ProjectType) -> rx.Component:
 
 
 def mt_project_view() -> rx.Component:
-    """The view for MT projects, showing language pair selection or next steps."""
-    return rx.cond(
+    """The view for MT projects, showing language pair selection, engine selection, or next steps."""
+    return rx.match(
         FilePrepState.pairs_confirmed,
-        rx.el.div(
-            rx.el.h4(
-                "MT Project - Language Pairs Confirmed",
-                class_name="text-xl font-medium mb-4 text-gray-700",
-            ),
-            rx.el.p(
-                "Language pairs have been selected and confirmed.",
-                class_name="text-gray-600 mb-2",
-            ),
-            rx.el.p(
-                "Placeholder for the next step in MT File Preparation (e.g., file upload).",
-                class_name="text-gray-600 italic",
-            ),
-            rx.el.button(
-                "Edit Language Pairs",
-                on_click=lambda: FilePrepState.set_pairs_confirmed(
-                    False
+        (False, language_pair_selector()),
+        (
+            True,
+            rx.match(
+                FilePrepState.engines_confirmed,
+                (False, engine_selector_component()),
+                (
+                    True,
+                    rx.el.div(
+                        rx.el.h4(
+                            "MT Project - Configuration Complete",
+                            class_name="text-xl font-medium mb-4 text-gray-700",
+                        ),
+                        rx.el.p(
+                            "Language pairs and MT engines have been selected and confirmed.",
+                            class_name="text-gray-600 mb-2",
+                        ),
+                        rx.el.p(
+                            "Placeholder for the next step (e.g., file upload/processing).",
+                            class_name="text-gray-600 italic",
+                        ),
+                        rx.el.div(
+                            rx.el.button(
+                                "Edit Language Pairs",
+                                on_click=lambda: FilePrepState.set_pairs_confirmed(
+                                    False
+                                ),
+                                class_name="mt-4 mr-4 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                            ),
+                            rx.el.button(
+                                "Edit MT Engines",
+                                on_click=lambda: FilePrepState.set_engines_confirmed(
+                                    False
+                                ),
+                                class_name="mt-4 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                            ),
+                            class_name="flex",
+                        ),
+                        class_name="p-4 border border-gray-200 rounded-lg bg-green-50",
+                    ),
                 ),
-                class_name="mt-4 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
             ),
-            class_name="p-4 border border-gray-200 rounded-lg bg-green-50",
         ),
-        language_pair_selector(),
     )
 
 

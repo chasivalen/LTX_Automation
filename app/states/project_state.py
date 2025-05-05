@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class ProjectState(rx.State):
-    """Manages project creation, selection, and associated data (like language pairs) for the LTX Bench flow."""
+    """Manages project creation, selection, and associated data (like language pairs and engines) for the LTX Bench flow."""
 
     projects: list[str] = ["Default Project"]
     selected_project: str | None = None
@@ -15,6 +15,9 @@ class ProjectState(rx.State):
     project_language_pairs: dict[
         str, list[tuple[str, str]]
     ] = {"Default Project": []}
+    project_mt_engines: dict[str, list[str]] = {
+        "Default Project": []
+    }
 
     @rx.event
     async def create_project(self):
@@ -37,6 +40,7 @@ class ProjectState(rx.State):
             self.projects.append(project_name)
             self.selected_project = project_name
             self.project_language_pairs[project_name] = []
+            self.project_mt_engines[project_name] = []
             self.new_project_name = ""
             logger.info(
                 f"Project '{project_name}' added to state."
@@ -79,6 +83,15 @@ class ProjectState(rx.State):
             logger.info(
                 f"Project '{project_name}' selected in state."
             )
+            if (
+                project_name
+                not in self.project_language_pairs
+            ):
+                self.project_language_pairs[
+                    project_name
+                ] = []
+            if project_name not in self.project_mt_engines:
+                self.project_mt_engines[project_name] = []
             yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project selection."
@@ -116,6 +129,15 @@ class ProjectState(rx.State):
         """Gets the language pairs for the currently selected project."""
         if self.selected_project:
             return self.project_language_pairs.get(
+                self.selected_project, []
+            )
+        return []
+
+    @rx.var
+    def current_project_engines(self) -> list[str]:
+        """Gets the MT engines for the currently selected project."""
+        if self.selected_project:
+            return self.project_mt_engines.get(
                 self.selected_project, []
             )
         return []

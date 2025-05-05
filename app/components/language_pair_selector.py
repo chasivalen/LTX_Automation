@@ -97,7 +97,7 @@ def language_pair_selector() -> rx.Component:
         rx.el.button(
             "Confirm Language Pairs",
             on_click=FilePrepState.confirm_language_pairs,
-            disabled=FilePrepState.is_confirm_disabled,
+            disabled=FilePrepState.is_confirm_pairs_disabled,
             class_name="w-full px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed",
         ),
         class_name="p-4 border border-gray-200 rounded-lg bg-gray-50",
