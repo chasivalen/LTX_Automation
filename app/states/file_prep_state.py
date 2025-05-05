@@ -11,7 +11,7 @@ Language = Literal[
     "Chinese",
 ]
 ReadmeChoice = Literal["default", "customize", "new"]
-DEFAULT_README_PLACEHOLDER = "\n**Instructions for MT Output Evaluation**\n\nThank you for helping evaluate the machine translation output. Your feedback is crucial for improving our systems.\n\n**Task:**\n\n1.  Read the source text segment carefully.\n2.  Read the corresponding machine-translated text segment.\n3.  Evaluate the translation based on the following criteria:\n    *   **Fluency:** Is the translated text grammatically correct and natural-sounding in the target language?\n    *   **Adequacy:** Does the translation accurately convey the meaning of the source text?\n    *   **Usability:** Could this translation be used as-is for its intended purpose (e.g., understanding information, communication)?\n4.  Assign scores or provide comments based on the project-specific guidelines.\n5.  Identify any critical errors (e.g., mistranslations, omissions, offensive content).\n\n**Please focus on:**\n*   Meaning and accuracy.\n*   Naturalness and flow.\n*   Typos or grammatical mistakes.\n\n**Do not focus on:**\n*   Minor stylistic preferences unless they significantly impact meaning or usability.\n\nIf you encounter any issues or have questions, please contact the project manager.\n"
+DEFAULT_README_TEXT = '1. Please read through READ ME tab before you kick off the Evaluation Task:\na. Check out the Metrics and their corresponding Definitions & Notes to understand what aspects of the language performance you are evaluating against;\nb. Check out the Scoring Definition section to understand how you should be scoring each segment from a range of 1 to 5;\nc. The Weights/Percentage section is for your reference as to how much each metric is valued for this specific project.\n\n2. Once you are done reading through the READ ME tab, please move on to the Part 1 tabs to start the actual evaluation task. \n\n3. Pre-Eval: Before you start evaluating a segment, please take a quick look at both the SOURCE and TARGET columns, and:\na.If you find the source quality of a segment in SOURCE Column too terrible to understand, please choose Incomprehensible Input from the dropdown list of Pre-Eval column and skip the evaluation of this segment;\nb. If you find that the content in TARGET Column is not the translation of source, please choose Irrelevant Target from the dropdown list and score 0.9 under every metric for this segment.\n\n4. If you don\'t see a big issue with either the SOURCE or TARGET, please start evaluating the segment from TARGET column\na. First give an overall score (1 to 5) for the whole segment under the "Overall" Column;\nb. Then evaluate per metric with a scoring range from 1 to 5;\nc. Metrics are divided into “Evergreen” and “Customized”, so please make sure to score all of them;\nd. Please score each metric based on the overall performance in this aspect according to the scoring definition; \ne. If a translation issue has an impact on more than one metric, please penalize it accordingly in multiple metrics as needed.\n\n5. Overall Rating will be automatically calculated with pre-filled formulas in both non-weighted and weighted forms, so please don’t touch any of the RATING Columns.\n'
 
 
 class FilePrepState(rx.State):
@@ -38,10 +38,9 @@ class FilePrepState(rx.State):
     new_engine_name: str = ""
     engines_confirmed: bool = False
     readme_choice: ReadmeChoice | None = None
-    custom_readme_content: str = ""
-    readme_expanded: bool = False
+    custom_readme_content: str = DEFAULT_README_TEXT
     readme_confirmed: bool = False
-    default_readme: str = DEFAULT_README_PLACEHOLDER
+    default_readme: str = DEFAULT_README_TEXT
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -225,13 +224,12 @@ class FilePrepState(rx.State):
                 self.custom_readme_content = (
                     self.default_readme
                 )
+            elif not saved_readme.strip():
+                self.readme_choice = "new"
+                self.custom_readme_content = ""
             else:
+                self.readme_choice = "customize"
                 self.custom_readme_content = saved_readme
-                self.readme_choice = (
-                    "new"
-                    if not saved_readme.strip()
-                    else "customize"
-                )
             self.engines_confirmed = True
             self.readme_confirmed = False
             yield rx.toast(
@@ -251,7 +249,11 @@ class FilePrepState(rx.State):
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
-            if not self.custom_readme_content.strip():
+            if (
+                not self.custom_readme_content.strip()
+                or self.custom_readme_content
+                == self.default_readme
+            ):
                 self.custom_readme_content = (
                     self.default_readme
                 )
@@ -262,11 +264,6 @@ class FilePrepState(rx.State):
     def set_custom_readme_content(self, content: str):
         """Updates the content of the custom Read Me."""
         self.custom_readme_content = content
-
-    @rx.event
-    def toggle_readme_expanded(self):
-        """Toggles the visibility of the default Read Me content."""
-        self.readme_expanded = not self.readme_expanded
 
     @rx.event
     async def confirm_readme(self):
@@ -308,8 +305,7 @@ class FilePrepState(rx.State):
         self.new_engine_name = ""
         self.engines_confirmed = False
         self.readme_choice = None
-        self.custom_readme_content = ""
-        self.readme_expanded = False
+        self.custom_readme_content = self.default_readme
         self.readme_confirmed = False
 
     @rx.event
@@ -320,7 +316,8 @@ class FilePrepState(rx.State):
             self.engines_confirmed = False
             self.readme_confirmed = False
             self.readme_choice = None
-            self.custom_readme_content = ""
+            self.custom_readme_content = self.default_readme
+            self.selected_engines = []
 
     @rx.event
     def set_engines_confirmed(self, confirmed: bool):
@@ -329,12 +326,17 @@ class FilePrepState(rx.State):
         if not confirmed:
             self.readme_confirmed = False
             self.readme_choice = None
-            self.custom_readme_content = ""
+            self.custom_readme_content = self.default_readme
 
     @rx.event
     def set_readme_confirmed(self, confirmed: bool):
         """Allows editing ReadMe again."""
         self.readme_confirmed = confirmed
+        if (
+            not confirmed
+            and self.readme_choice != "default"
+        ):
+            pass
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
@@ -379,4 +381,4 @@ class FilePrepState(rx.State):
             return self.default_readme
         elif self.readme_choice in ["customize", "new"]:
             return self.custom_readme_content
-        return ""
+        return self.default_readme

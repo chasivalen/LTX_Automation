@@ -1,6 +1,7 @@
 import reflex as rx
 from typing import Optional
 import logging
+from app.states.file_prep_state import DEFAULT_README_TEXT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class ProjectState(rx.State):
         "Default Project": []
     }
     project_readme_content: dict[str, str] = {
-        "Default Project": ""
+        "Default Project": DEFAULT_README_TEXT
     }
 
     @rx.event
@@ -27,6 +28,7 @@ class ProjectState(rx.State):
         """
         Creates a new project, selects it, and notifies AppState.
         Resets FilePrepState for the new project context.
+        Initializes project data (including ReadMe with default).
         Shows a toast message on failure (invalid name or duplicate).
         """
         from app.states.app_state import AppState
@@ -44,7 +46,9 @@ class ProjectState(rx.State):
             self.selected_project = project_name
             self.project_language_pairs[project_name] = []
             self.project_mt_engines[project_name] = []
-            self.project_readme_content[project_name] = ""
+            self.project_readme_content[project_name] = (
+                DEFAULT_README_TEXT
+            )
             self.new_project_name = ""
             logger.info(
                 f"Project '{project_name}' added to state."
@@ -75,6 +79,7 @@ class ProjectState(rx.State):
     async def select_project(self, project_name: str):
         """
         Selects an existing project, notifies AppState, and resets FilePrepState.
+        Ensures project data (including ReadMe) exists or initializes it.
         """
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
@@ -102,7 +107,7 @@ class ProjectState(rx.State):
             ):
                 self.project_readme_content[
                     project_name
-                ] = ""
+                ] = DEFAULT_README_TEXT
             yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project selection."
@@ -126,6 +131,7 @@ class ProjectState(rx.State):
 
     @rx.event
     def set_new_project_name(self, name: str):
+        """Sets the name for a potential new project."""
         self.new_project_name = name
 
     @rx.var
@@ -158,6 +164,6 @@ class ProjectState(rx.State):
         """Gets the saved ReadMe content for the currently selected project."""
         if self.selected_project:
             return self.project_readme_content.get(
-                self.selected_project, ""
+                self.selected_project, DEFAULT_README_TEXT
             )
-        return ""
+        return DEFAULT_README_TEXT

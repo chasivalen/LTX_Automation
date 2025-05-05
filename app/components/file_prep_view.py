@@ -21,8 +21,8 @@ def project_type_button(text: ProjectType) -> rx.Component:
         ),
         class_name=rx.cond(
             AppState.file_prep_project_type == text,
-            "px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium",
-            "px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium",
+            "px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium transition duration-150",
+            "px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition duration-150",
         ),
     )
 
@@ -49,29 +49,29 @@ def mt_project_view() -> rx.Component:
                             True,
                             rx.el.div(
                                 rx.el.h4(
-                                    "MT Project - Configuration Complete",
+                                    "MT Project - Configuration Complete 🎉",
                                     class_name="text-xl font-medium mb-4 text-green-700",
                                 ),
                                 rx.el.p(
                                     "Language pairs, MT engines, and Read Me instructions have been selected and confirmed.",
                                     class_name="text-gray-600 mb-2",
                                 ),
-                                rx.el.p(
-                                    "Placeholder for the next step (e.g., file upload/processing).",
-                                    class_name="text-gray-600 italic mb-4",
-                                ),
                                 rx.el.details(
                                     rx.el.summary(
                                         "View Final Read Me Content",
-                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2",
+                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
                                     ),
                                     rx.el.div(
                                         rx.markdown(
                                             FilePrepState.final_readme_content
                                         ),
-                                        class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto",
+                                        class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-80 overflow-y-auto mt-2",
                                     ),
                                     class_name="mb-4",
+                                ),
+                                rx.el.p(
+                                    "Placeholder for the next step (e.g., file upload/processing).",
+                                    class_name="text-gray-600 italic mb-6",
                                 ),
                                 rx.el.div(
                                     rx.el.button(
@@ -79,25 +79,25 @@ def mt_project_view() -> rx.Component:
                                         on_click=lambda: FilePrepState.set_pairs_confirmed(
                                             False
                                         ),
-                                        class_name="mt-4 mr-4 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                        class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
                                     ),
                                     rx.el.button(
                                         "Edit MT Engines",
                                         on_click=lambda: FilePrepState.set_engines_confirmed(
                                             False
                                         ),
-                                        class_name="mt-4 mr-4 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                        class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
                                     ),
                                     rx.el.button(
                                         "Edit Read Me",
                                         on_click=lambda: FilePrepState.set_readme_confirmed(
                                             False
                                         ),
-                                        class_name="mt-4 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                        class_name="mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
                                     ),
-                                    class_name="flex flex-wrap",
+                                    class_name="flex flex-wrap border-t border-gray-200 pt-4",
                                 ),
-                                class_name="p-4 border border-green-200 rounded-lg bg-green-50",
+                                class_name="p-6 border border-green-200 rounded-lg bg-green-50 shadow-md",
                             ),
                         ),
                     ),
@@ -118,7 +118,7 @@ def file_prep_view() -> rx.Component:
             project_type_button("MT"),
             project_type_button("LLM"),
             project_type_button("Gen AI"),
-            class_name="flex space-x-4 mb-8",
+            class_name="flex flex-wrap gap-4 mb-8",
         ),
         rx.match(
             AppState.file_prep_project_type,
