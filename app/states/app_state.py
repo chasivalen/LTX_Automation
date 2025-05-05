@@ -34,31 +34,28 @@ class AppState(rx.State):
         self, choice: InitialChoiceType
     ):
         """Sets the initial choice between SEO and LTX Bench."""
-        async with self:
-            self.initial_choice = choice
-            self.project_selected = False
-            self.selected_view = "default"
-            self.file_prep_project_type = None
+        self.initial_choice = choice
+        self.project_selected = False
+        self.selected_view = "default"
+        self.file_prep_project_type = None
         yield self._reset_file_prep_state()
 
     @rx.event
     async def reset_initial_choice(self):
         """Resets the initial choice and related states."""
-        async with self:
-            self.initial_choice = None
-            self.project_selected = False
-            self.selected_view = "default"
-            self.file_prep_project_type = None
+        self.initial_choice = None
+        self.project_selected = False
+        self.selected_view = "default"
+        self.file_prep_project_type = None
         yield self._reset_file_prep_state()
 
     @rx.event
     async def set_project_selected(self, selected: bool):
         """Sets the project selected state for the LTX Bench flow."""
-        async with self:
-            self.project_selected = selected
-            if not selected:
-                self.selected_view = "default"
-                self.file_prep_project_type = None
+        self.project_selected = selected
+        if not selected:
+            self.selected_view = "default"
+            self.file_prep_project_type = None
         if not selected:
             yield self._reset_file_prep_state()
 
@@ -66,13 +63,9 @@ class AppState(rx.State):
     async def set_selected_view(self, view: ViewType):
         """Sets the currently active view within the LTX Bench flow."""
         old_view = self.selected_view
-        async with self:
-            self.selected_view = view
-            if (
-                old_view == "file_prep"
-                and view != "file_prep"
-            ):
-                self.file_prep_project_type = None
+        self.selected_view = view
+        if old_view == "file_prep" and view != "file_prep":
+            self.file_prep_project_type = None
         if old_view == "file_prep" and view != "file_prep":
             yield self._reset_file_prep_state()
         elif (
@@ -89,6 +82,5 @@ class AppState(rx.State):
         self, project_type: ProjectType
     ):
         """Sets the project type for the File Prep view (within LTX Bench)."""
-        async with self:
-            self.file_prep_project_type = project_type
+        self.file_prep_project_type = project_type
         yield self._reset_file_prep_state()

@@ -110,19 +110,17 @@ class FilePrepState(rx.State):
             return
         project_state = await self.get_state(ProjectState)
         if project_state.selected_project:
-            async with project_state:
-                if (
-                    project_state.selected_project
-                    not in project_state.project_language_pairs
-                ):
-                    project_state.project_language_pairs[
-                        project_state.selected_project
-                    ] = []
+            if (
+                project_state.selected_project
+                not in project_state.project_language_pairs
+            ):
                 project_state.project_language_pairs[
                     project_state.selected_project
-                ] = list(self.selected_pairs_for_session)
-            async with self:
-                self.pairs_confirmed = True
+                ] = []
+            project_state.project_language_pairs[
+                project_state.selected_project
+            ] = list(self.selected_pairs_for_session)
+            self.pairs_confirmed = True
             yield rx.toast(
                 "Language pairs confirmed!", duration=3000
             )
