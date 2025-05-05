@@ -278,7 +278,7 @@ def metric_definition_component() -> rx.Component:
                 class_name="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
             ),
             rx.el.button(
-                "Confirm Metrics, Weights & Pass Criteria ➡",
+                "Confirm Metrics & Weighting ➡",
                 on_click=FilePrepState.confirm_metrics,
                 disabled=FilePrepState.is_confirm_metrics_disabled,
                 class_name="px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150",

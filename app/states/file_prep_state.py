@@ -333,13 +333,17 @@ class FilePrepState(rx.State):
                 for m in self.included_evergreen_metrics
                 if m != metric_name
             ]
-            if metric_name in self.metric_weights:
-                del self.metric_weights[metric_name]
+            temp_weights = self.metric_weights.copy()
+            if metric_name in temp_weights:
+                del temp_weights[metric_name]
+            self.metric_weights = temp_weights
         else:
             self.included_evergreen_metrics.append(
                 metric_name
             )
-            self.metric_weights[metric_name] = 5
+            temp_weights = self.metric_weights.copy()
+            temp_weights[metric_name] = 5
+            self.metric_weights = temp_weights
 
     @rx.event
     def set_new_custom_metric_name(self, name: str):
@@ -380,7 +384,9 @@ class FilePrepState(rx.State):
         self.custom_metrics.append(
             CustomMetric(name=name, definition=definition)
         )
-        self.metric_weights[name] = 5
+        temp_weights = self.metric_weights.copy()
+        temp_weights[name] = 5
+        self.metric_weights = temp_weights
         self.new_custom_metric_name = ""
         self.new_custom_metric_definition = ""
 
@@ -391,35 +397,40 @@ class FilePrepState(rx.State):
             for m in self.custom_metrics
             if m["name"] != metric_name
         ]
-        if metric_name in self.metric_weights:
-            del self.metric_weights[metric_name]
+        temp_weights = self.metric_weights.copy()
+        if metric_name in temp_weights:
+            del temp_weights[metric_name]
+        self.metric_weights = temp_weights
 
     @rx.event
     def set_metric_weight(
         self, metric_name: str, weight_str: str
     ):
+        temp_weights = self.metric_weights.copy()
         try:
             if weight_str == "":
-                if metric_name in self.metric_weights:
-                    del self.metric_weights[metric_name]
+                if metric_name in temp_weights:
+                    del temp_weights[metric_name]
+                self.metric_weights = temp_weights
                 return
             weight = int(weight_str)
             if 1 <= weight <= 10:
-                self.metric_weights[metric_name] = weight
+                temp_weights[metric_name] = weight
             else:
-                if metric_name in self.metric_weights:
-                    del self.metric_weights[metric_name]
+                if metric_name in temp_weights:
+                    del temp_weights[metric_name]
                 yield rx.toast(
                     f"Weight for '{metric_name}' must be between 1 and 10.",
                     duration=3000,
                 )
         except ValueError:
-            if metric_name in self.metric_weights:
-                del self.metric_weights[metric_name]
+            if metric_name in temp_weights:
+                del temp_weights[metric_name]
             yield rx.toast(
                 f"Invalid weight for '{metric_name}'. Please enter a number.",
                 duration=3000,
             )
+        self.metric_weights = temp_weights
 
     @rx.event
     def set_pass_threshold(self, threshold_str: str):
@@ -737,10 +748,11 @@ class FilePrepState(rx.State):
 
     @rx.var
     def total_metric_weight(self) -> int:
-        """Calculates the sum of weights for all included metrics."""
+        """Calculates the sum of weights for all currently included metrics."""
         total = 0
-        for metric in self.all_included_metrics:
-            total += self.metric_weights.get(
-                metric["name"], 0
-            )
+        included_names = [
+            m["name"] for m in self.all_included_metrics
+        ]
+        for name in included_names:
+            total += self.metric_weights.get(name, 0)
         return total
