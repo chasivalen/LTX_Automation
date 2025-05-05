@@ -4,8 +4,8 @@ from app.states.file_prep_state import FilePrepState
 
 def language_select(
     placeholder: str,
-    value: rx.Var[str | None],
-    on_change: rx.EventHandler,
+    value_var: rx.Var[str | None],
+    on_change_handler: rx.EventHandler,
 ) -> rx.Component:
     """Creates a language selection dropdown."""
     return rx.el.select(
@@ -14,8 +14,8 @@ def language_select(
             FilePrepState.available_languages,
             lambda lang: rx.el.option(lang, value=lang),
         ),
-        value=value.to_string(),
-        on_change=on_change,
+        value=value_var.to_string(),
+        on_change=on_change_handler,
         class_name="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
     )
 

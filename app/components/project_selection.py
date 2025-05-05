@@ -24,8 +24,8 @@ def project_selection_component() -> rx.Component:
             rx.el.input(
                 placeholder="Enter new project name",
                 on_change=ProjectState.set_new_project_name,
-                class_name="w-full p-2 border border-gray-300 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
                 default_value=ProjectState.new_project_name,
+                class_name="w-full p-2 border border-gray-300 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
             ),
             rx.el.button(
                 "Create Project",
@@ -56,7 +56,6 @@ def project_selection_component() -> rx.Component:
                 on_change=ProjectState.select_project,
                 value=ProjectState.selected_project.to_string(),
                 class_name="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
-                default_value="",
             ),
             class_name="mb-4",
         ),
