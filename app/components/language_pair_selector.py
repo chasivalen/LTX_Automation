@@ -15,7 +15,7 @@ def language_select(
             FilePrepState.available_languages,
             lambda lang: rx.el.option(lang, value=lang),
         ),
-        value=value_var,
+        value=rx.cond(value_var, value_var, ""),
         on_change=on_change_handler,
         class_name="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
     )
