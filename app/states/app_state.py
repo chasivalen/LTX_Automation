@@ -27,7 +27,7 @@ class AppState(rx.State):
         file_prep_state = await self.get_state(
             FilePrepState
         )
-        yield file_prep_state.reset_state()
+        yield FilePrepState.reset_state()
 
     @rx.event
     async def set_initial_choice(
@@ -38,7 +38,10 @@ class AppState(rx.State):
         self.project_selected = False
         self.selected_view = "default"
         self.file_prep_project_type = None
-        yield self._yield_reset_file_prep_state()
+        async for (
+            event
+        ) in self._yield_reset_file_prep_state():
+            yield event
 
     @rx.event
     async def reset_initial_choice(self):
@@ -47,7 +50,10 @@ class AppState(rx.State):
         self.project_selected = False
         self.selected_view = "default"
         self.file_prep_project_type = None
-        yield self._yield_reset_file_prep_state()
+        async for (
+            event
+        ) in self._yield_reset_file_prep_state():
+            yield event
 
     @rx.event
     async def set_project_selected(self, selected: bool):
@@ -59,7 +65,10 @@ class AppState(rx.State):
         if not selected:
             self.selected_view = "default"
             self.file_prep_project_type = None
-            yield self._yield_reset_file_prep_state()
+            async for (
+                event
+            ) in self._yield_reset_file_prep_state():
+                yield event
 
     @rx.event
     async def set_selected_view(self, view: ViewType):
@@ -78,7 +87,10 @@ class AppState(rx.State):
             )
         ):
             self.file_prep_project_type = None
-            yield self._yield_reset_file_prep_state()
+            async for (
+                event
+            ) in self._yield_reset_file_prep_state():
+                yield event
 
     @rx.event
     async def set_file_prep_project_type(
@@ -90,4 +102,7 @@ class AppState(rx.State):
         """
         if self.file_prep_project_type != project_type:
             self.file_prep_project_type = project_type
-            yield self._yield_reset_file_prep_state()
+            async for (
+                event
+            ) in self._yield_reset_file_prep_state():
+                yield event
