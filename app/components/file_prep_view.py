@@ -7,6 +7,9 @@ from app.components.language_pair_selector import (
 from app.components.engine_selector import (
     engine_selector_component,
 )
+from app.components.readme_customizer import (
+    readme_customizer_component,
+)
 
 
 def project_type_button(text: ProjectType) -> rx.Component:
@@ -25,7 +28,7 @@ def project_type_button(text: ProjectType) -> rx.Component:
 
 
 def mt_project_view() -> rx.Component:
-    """The view for MT projects, showing language pair selection, engine selection, or next steps."""
+    """The view for MT projects, progressing through language pairs, engines, and Read Me."""
     return rx.match(
         FilePrepState.pairs_confirmed,
         (False, language_pair_selector()),
@@ -36,37 +39,67 @@ def mt_project_view() -> rx.Component:
                 (False, engine_selector_component()),
                 (
                     True,
-                    rx.el.div(
-                        rx.el.h4(
-                            "MT Project - Configuration Complete",
-                            class_name="text-xl font-medium mb-4 text-gray-700",
+                    rx.match(
+                        FilePrepState.readme_confirmed,
+                        (
+                            False,
+                            readme_customizer_component(),
                         ),
-                        rx.el.p(
-                            "Language pairs and MT engines have been selected and confirmed.",
-                            class_name="text-gray-600 mb-2",
-                        ),
-                        rx.el.p(
-                            "Placeholder for the next step (e.g., file upload/processing).",
-                            class_name="text-gray-600 italic",
-                        ),
-                        rx.el.div(
-                            rx.el.button(
-                                "Edit Language Pairs",
-                                on_click=lambda: FilePrepState.set_pairs_confirmed(
-                                    False
+                        (
+                            True,
+                            rx.el.div(
+                                rx.el.h4(
+                                    "MT Project - Configuration Complete",
+                                    class_name="text-xl font-medium mb-4 text-green-700",
                                 ),
-                                class_name="mt-4 mr-4 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
-                            ),
-                            rx.el.button(
-                                "Edit MT Engines",
-                                on_click=lambda: FilePrepState.set_engines_confirmed(
-                                    False
+                                rx.el.p(
+                                    "Language pairs, MT engines, and Read Me instructions have been selected and confirmed.",
+                                    class_name="text-gray-600 mb-2",
                                 ),
-                                class_name="mt-4 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                rx.el.p(
+                                    "Placeholder for the next step (e.g., file upload/processing).",
+                                    class_name="text-gray-600 italic mb-4",
+                                ),
+                                rx.el.details(
+                                    rx.el.summary(
+                                        "View Final Read Me Content",
+                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2",
+                                    ),
+                                    rx.el.div(
+                                        rx.markdown(
+                                            FilePrepState.final_readme_content
+                                        ),
+                                        class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto",
+                                    ),
+                                    class_name="mb-4",
+                                ),
+                                rx.el.div(
+                                    rx.el.button(
+                                        "Edit Language Pairs",
+                                        on_click=lambda: FilePrepState.set_pairs_confirmed(
+                                            False
+                                        ),
+                                        class_name="mt-4 mr-4 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                    ),
+                                    rx.el.button(
+                                        "Edit MT Engines",
+                                        on_click=lambda: FilePrepState.set_engines_confirmed(
+                                            False
+                                        ),
+                                        class_name="mt-4 mr-4 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                    ),
+                                    rx.el.button(
+                                        "Edit Read Me",
+                                        on_click=lambda: FilePrepState.set_readme_confirmed(
+                                            False
+                                        ),
+                                        class_name="mt-4 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600",
+                                    ),
+                                    class_name="flex flex-wrap",
+                                ),
+                                class_name="p-4 border border-green-200 rounded-lg bg-green-50",
                             ),
-                            class_name="flex",
                         ),
-                        class_name="p-4 border border-gray-200 rounded-lg bg-green-50",
                     ),
                 ),
             ),
