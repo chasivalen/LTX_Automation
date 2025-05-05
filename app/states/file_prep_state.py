@@ -58,9 +58,8 @@ class FilePrepState(rx.State):
                 new_pair
                 not in self.selected_pairs_for_session
             ):
-                self.selected_pairs_for_session = (
-                    self.selected_pairs_for_session
-                    + [new_pair]
+                self.selected_pairs_for_session.append(
+                    new_pair
                 )
                 self.current_source_language = None
                 self.current_target_language = None
@@ -111,9 +110,10 @@ class FilePrepState(rx.State):
             return
         project_state = await self.get_state(ProjectState)
         if project_state.selected_project:
-            project_state.project_language_pairs[
-                project_state.selected_project
-            ] = list(self.selected_pairs_for_session)
+            async with project_state:
+                project_state.project_language_pairs[
+                    project_state.selected_project
+                ] = list(self.selected_pairs_for_session)
             async with self:
                 self.pairs_confirmed = True
             yield rx.toast(
