@@ -15,7 +15,7 @@ DEFAULT_README_TEXT = "1. Please read through READ ME tab before you kick off th
 
 
 class FilePrepState(rx.State):
-    """Manages state specific to the File Prep view, including MT language pairs, engines, and Read Me instructions."""
+    """Manages state specific to the File Prep view, including MT language pairs, engines, Read Me, and Stakeholder Comments."""
 
     available_languages: list[Language] = [
         "English",
@@ -41,20 +41,19 @@ class FilePrepState(rx.State):
     custom_readme_content: str = DEFAULT_README_TEXT
     readme_confirmed: bool = False
     default_readme: str = DEFAULT_README_TEXT
+    stakeholder_comments: str = ""
+    stakeholder_confirmed: bool = False
 
     @rx.event
     def set_current_source_language(self, lang: Language):
-        """Sets the source language for the next pair."""
         self.current_source_language = lang
 
     @rx.event
     def set_current_target_language(self, lang: Language):
-        """Sets the target language for the next pair."""
         self.current_target_language = lang
 
     @rx.event
     def add_language_pair(self):
-        """Adds the currently selected language pair to the session list."""
         if (
             self.current_source_language
             and self.current_target_language
@@ -103,7 +102,6 @@ class FilePrepState(rx.State):
     def remove_language_pair(
         self, pair_to_remove: tuple[str, str]
     ):
-        """Removes a language pair from the session list."""
         self.selected_pairs_for_session = [
             pair
             for pair in self.selected_pairs_for_session
@@ -112,7 +110,6 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_language_pairs(self):
-        """Confirms the selected language pairs and saves them to the project state."""
         from app.states.project_state import ProjectState
 
         if not self.selected_pairs_for_session:
@@ -123,13 +120,6 @@ class FilePrepState(rx.State):
             return
         project_state = await self.get_state(ProjectState)
         if project_state.selected_project:
-            if (
-                project_state.selected_project
-                not in project_state.project_language_pairs
-            ):
-                project_state.project_language_pairs[
-                    project_state.selected_project
-                ] = []
             project_state.project_language_pairs[
                 project_state.selected_project
             ] = list(self.selected_pairs_for_session)
@@ -139,8 +129,7 @@ class FilePrepState(rx.State):
                 )
             )
             self.pairs_confirmed = True
-            self.engines_confirmed = False
-            self.readme_confirmed = False
+            self._reset_downstream_of_pairs()
             yield rx.toast(
                 "Language pairs confirmed! Select MT engines next.",
                 duration=3000,
@@ -153,12 +142,10 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_new_engine_name(self, name: str):
-        """Updates the input field for adding a new engine."""
         self.new_engine_name = name
 
     @rx.event
     def toggle_engine(self, engine_name: str):
-        """Adds or removes a predefined engine from the selected list."""
         if engine_name in self.selected_engines:
             self.selected_engines = [
                 eng
@@ -170,7 +157,6 @@ class FilePrepState(rx.State):
 
     @rx.event
     def add_custom_engine(self):
-        """Adds a custom engine name from the input field."""
         name = self.new_engine_name.strip()
         if name and name not in self.selected_engines:
             self.selected_engines.append(name)
@@ -188,7 +174,6 @@ class FilePrepState(rx.State):
 
     @rx.event
     def remove_engine(self, engine_name: str):
-        """Removes an engine from the selected list (used for custom/selected ones)."""
         self.selected_engines = [
             eng
             for eng in self.selected_engines
@@ -197,7 +182,6 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_engines(self):
-        """Confirms the selected MT engines, saves them, and prepares for ReadMe step."""
         from app.states.project_state import ProjectState
 
         if not self.selected_engines:
@@ -211,27 +195,9 @@ class FilePrepState(rx.State):
             project_state.project_mt_engines[
                 project_state.selected_project
             ] = list(self.selected_engines)
-            saved_readme = (
-                project_state.project_readme_content.get(
-                    project_state.selected_project, None
-                )
-            )
-            if (
-                saved_readme is None
-                or saved_readme == self.default_readme
-            ):
-                self.readme_choice = "default"
-                self.custom_readme_content = (
-                    self.default_readme
-                )
-            elif not saved_readme.strip():
-                self.readme_choice = "new"
-                self.custom_readme_content = ""
-            else:
-                self.readme_choice = "customize"
-                self.custom_readme_content = saved_readme
+            self._load_project_text_content(project_state)
             self.engines_confirmed = True
-            self.readme_confirmed = False
+            self._reset_downstream_of_engines()
             yield rx.toast(
                 "MT Engines confirmed! Customize Read Me instructions next.",
                 duration=3000,
@@ -244,33 +210,28 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_readme_choice(self, choice: ReadmeChoice):
-        """Sets the user's choice for the Read Me instructions."""
         self.readme_choice = choice
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
-            saved_readme = self.custom_readme_content
             if (
-                not saved_readme.strip()
-                or saved_readme == self.default_readme
+                not self.custom_readme_content.strip()
+                or self.custom_readme_content
+                == self.default_readme
             ):
                 self.custom_readme_content = (
                     self.default_readme
                 )
-            else:
-                self.custom_readme_content = saved_readme
         elif choice == "new":
             if self.custom_readme_content.strip():
                 self.custom_readme_content = ""
 
     @rx.event
     def set_custom_readme_content(self, content: str):
-        """Updates the content of the custom Read Me."""
         self.custom_readme_content = content
 
     @rx.event
     async def confirm_readme(self):
-        """Confirms the Read Me choice and content, saves to project state."""
         from app.states.project_state import ProjectState
 
         project_state = await self.get_state(ProjectState)
@@ -293,53 +254,120 @@ class FilePrepState(rx.State):
             project_state.selected_project
         ] = final_content
         self.readme_confirmed = True
+        self._reset_downstream_of_readme()
         yield rx.toast(
-            "Read Me Instructions Confirmed!", duration=3000
+            "Read Me Instructions Confirmed! Add Stakeholder Perspective next.",
+            duration=3000,
+        )
+
+    @rx.event
+    def set_stakeholder_comments(self, comments: str):
+        self.stakeholder_comments = comments
+
+    @rx.event
+    async def confirm_stakeholder_perspective(self):
+        from app.states.project_state import ProjectState
+
+        project_state = await self.get_state(ProjectState)
+        if not project_state.selected_project:
+            yield rx.toast(
+                "Error: No project selected. Cannot confirm Stakeholder Perspective.",
+                duration=4000,
+            )
+            return
+        project_state.project_stakeholder_comments[
+            project_state.selected_project
+        ] = self.stakeholder_comments
+        self.stakeholder_confirmed = True
+        yield rx.toast(
+            "Stakeholder Perspective Confirmed! Defining Metrics next.",
+            duration=3000,
+        )
+
+    def _reset_downstream_of_pairs(self):
+        """Resets state from Engines onwards."""
+        self.engines_confirmed = False
+        self.readme_confirmed = False
+        self.stakeholder_confirmed = False
+        self.readme_choice = None
+        self.custom_readme_content = self.default_readme
+        self.stakeholder_comments = ""
+        self.selected_engines = []
+        self.new_engine_name = ""
+
+    def _reset_downstream_of_engines(self):
+        """Resets state from ReadMe onwards."""
+        self.readme_confirmed = False
+        self.stakeholder_confirmed = False
+        self.readme_choice = None
+        self.stakeholder_comments = ""
+
+    def _reset_downstream_of_readme(self):
+        """Resets state from Stakeholder onwards."""
+        self.stakeholder_confirmed = False
+
+    def _load_project_text_content(self, project_state):
+        """Loads ReadMe and Stakeholder data from ProjectState into FilePrepState."""
+        if not project_state.selected_project:
+            return
+        saved_readme = (
+            project_state.project_readme_content.get(
+                project_state.selected_project,
+                self.default_readme,
+            )
+        )
+        if saved_readme == self.default_readme:
+            self.readme_choice = "default"
+            self.custom_readme_content = self.default_readme
+        elif not saved_readme.strip():
+            self.readme_choice = "new"
+            self.custom_readme_content = ""
+        else:
+            self.readme_choice = "customize"
+            self.custom_readme_content = saved_readme
+        self.stakeholder_comments = (
+            project_state.project_stakeholder_comments.get(
+                project_state.selected_project, ""
+            )
         )
 
     @rx.event
     def reset_state(self):
-        """Resets the FilePrepState to its initial values, using default readme."""
+        """Resets the entire FilePrepState."""
         self.current_source_language = None
         self.current_target_language = None
         self.selected_pairs_for_session = []
         self.pairs_confirmed = False
-        self.selected_engines = []
-        self.new_engine_name = ""
-        self.engines_confirmed = False
-        self.readme_choice = None
-        self.custom_readme_content = DEFAULT_README_TEXT
-        self.readme_confirmed = False
-        self.default_readme = DEFAULT_README_TEXT
+        self._reset_downstream_of_pairs()
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
-        """Allows editing pairs again by setting confirmed to False."""
+        """Allows editing pairs again, resets downstream state."""
         self.pairs_confirmed = confirmed
         if not confirmed:
-            self.engines_confirmed = False
-            self.readme_confirmed = False
-            self.readme_choice = None
-            self.custom_readme_content = self.default_readme
-            self.selected_engines = []
+            self._reset_downstream_of_pairs()
 
     @rx.event
     def set_engines_confirmed(self, confirmed: bool):
-        """Allows editing engines again by setting confirmed to False."""
+        """Allows editing engines again, resets downstream state."""
         self.engines_confirmed = confirmed
         if not confirmed:
-            self.readme_confirmed = False
-            self.readme_choice = None
-            self.custom_readme_content = self.default_readme
+            self._reset_downstream_of_engines()
 
     @rx.event
     def set_readme_confirmed(self, confirmed: bool):
-        """Allows editing ReadMe again."""
+        """Allows editing ReadMe again, resets downstream state."""
         self.readme_confirmed = confirmed
+        if not confirmed:
+            self._reset_downstream_of_readme()
+
+    @rx.event
+    def set_stakeholder_confirmed(self, confirmed: bool):
+        """Allows editing Stakeholder comments again."""
+        self.stakeholder_confirmed = confirmed
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
-        """Checks if the 'Add Pair' button should be disabled."""
         return (
             self.current_source_language is None
             or self.current_target_language is None
@@ -349,22 +377,18 @@ class FilePrepState(rx.State):
 
     @rx.var
     def is_confirm_pairs_disabled(self) -> bool:
-        """Checks if the 'Confirm Pairs' button should be disabled."""
         return not self.selected_pairs_for_session
 
     @rx.var
     def is_add_engine_disabled(self) -> bool:
-        """Checks if the 'Add Engine' button should be disabled."""
         return self.new_engine_name.strip() == ""
 
     @rx.var
     def is_confirm_engines_disabled(self) -> bool:
-        """Checks if the 'Confirm Engines' button should be disabled."""
         return not self.selected_engines
 
     @rx.var
     def is_confirm_readme_disabled(self) -> bool:
-        """Checks if the 'Confirm ReadMe' button should be disabled."""
         if self.readme_choice is None:
             return True
         if self.readme_choice in ["customize", "new"] and (
@@ -374,8 +398,11 @@ class FilePrepState(rx.State):
         return False
 
     @rx.var
+    def is_confirm_stakeholder_disabled(self) -> bool:
+        return False
+
+    @rx.var
     def final_readme_content(self) -> str:
-        """Determines the final Read Me content based on the user's choice."""
         if self.readme_choice == "default":
             return self.default_readme
         elif self.readme_choice in ["customize", "new"]:

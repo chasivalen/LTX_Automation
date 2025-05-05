@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class ProjectState(rx.State):
-    """Manages project creation, selection, and associated data (like language pairs, engines, and ReadMe) for the LTX Bench flow."""
+    """Manages project creation, selection, and associated data (like language pairs, engines, ReadMe, and stakeholder comments) for the LTX Bench flow."""
 
     projects: list[str] = ["Default Project"]
     selected_project: str | None = None
@@ -22,13 +22,16 @@ class ProjectState(rx.State):
     project_readme_content: dict[str, str] = {
         "Default Project": DEFAULT_README_TEXT
     }
+    project_stakeholder_comments: dict[str, str] = {
+        "Default Project": ""
+    }
 
     @rx.event
     async def create_project(self):
         """
         Creates a new project, selects it, and notifies AppState.
         Resets FilePrepState for the new project context.
-        Initializes project data (including ReadMe with default).
+        Initializes project data (including ReadMe with default and empty comments).
         Shows a toast message on failure (invalid name or duplicate).
         """
         from app.states.app_state import AppState
@@ -49,6 +52,9 @@ class ProjectState(rx.State):
             self.project_readme_content[project_name] = (
                 DEFAULT_README_TEXT
             )
+            self.project_stakeholder_comments[
+                project_name
+            ] = ""
             self.new_project_name = ""
             logger.info(
                 f"Project '{project_name}' added to state."
@@ -79,7 +85,7 @@ class ProjectState(rx.State):
     async def select_project(self, project_name: str):
         """
         Selects an existing project, notifies AppState, and resets FilePrepState.
-        Ensures project data (including ReadMe) exists or initializes it.
+        Ensures project data (including ReadMe and comments) exists or initializes it.
         """
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
@@ -108,6 +114,13 @@ class ProjectState(rx.State):
                 self.project_readme_content[
                     project_name
                 ] = DEFAULT_README_TEXT
+            if (
+                project_name
+                not in self.project_stakeholder_comments
+            ):
+                self.project_stakeholder_comments[
+                    project_name
+                ] = ""
             yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project selection."
@@ -143,7 +156,6 @@ class ProjectState(rx.State):
     def current_project_pairs(
         self,
     ) -> list[tuple[str, str]]:
-        """Gets the language pairs for the currently selected project."""
         if self.selected_project:
             return self.project_language_pairs.get(
                 self.selected_project, []
@@ -152,7 +164,6 @@ class ProjectState(rx.State):
 
     @rx.var
     def current_project_engines(self) -> list[str]:
-        """Gets the MT engines for the currently selected project."""
         if self.selected_project:
             return self.project_mt_engines.get(
                 self.selected_project, []
@@ -161,9 +172,16 @@ class ProjectState(rx.State):
 
     @rx.var
     def current_project_readme(self) -> str:
-        """Gets the saved ReadMe content for the currently selected project."""
         if self.selected_project:
             return self.project_readme_content.get(
                 self.selected_project, DEFAULT_README_TEXT
             )
         return DEFAULT_README_TEXT
+
+    @rx.var
+    def current_project_stakeholder_comments(self) -> str:
+        if self.selected_project:
+            return self.project_stakeholder_comments.get(
+                self.selected_project, ""
+            )
+        return ""
