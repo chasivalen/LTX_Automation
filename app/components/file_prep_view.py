@@ -75,8 +75,8 @@ def mt_project_view() -> rx.Component:
                                                     class_name="text-xl font-medium mb-4 text-green-700",
                                                 ),
                                                 rx.el.p(
-                                                    "All steps completed: Language pairs, MT engines, Read Me, Stakeholder comments, and Metrics/Weights defined.",
-                                                    class_name="text-gray-600 mb-4",
+                                                    "All steps completed. Review the configuration below.",
+                                                    class_name="text-gray-600 mb-6",
                                                 ),
                                                 rx.el.details(
                                                     rx.el.summary(
@@ -93,7 +93,53 @@ def mt_project_view() -> rx.Component:
                                                         ),
                                                         class_name="list-disc list-inside p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2",
                                                     ),
+                                                    rx.el.div(
+                                                        rx.el.strong(
+                                                            "Total Weight Sum: "
+                                                        ),
+                                                        FilePrepState.total_metric_weight,
+                                                        class_name="mt-2 font-semibold text-sm",
+                                                    ),
                                                     class_name="mb-4",
+                                                ),
+                                                rx.el.details(
+                                                    rx.el.summary(
+                                                        "View Final Pass Criteria",
+                                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
+                                                    ),
+                                                    rx.el.div(
+                                                        rx.el.strong(
+                                                            "Threshold: "
+                                                        ),
+                                                        rx.cond(
+                                                            FilePrepState.pass_threshold
+                                                            != None,
+                                                            FilePrepState.pass_threshold.to_string(),
+                                                            rx.el.em(
+                                                                "Not Set",
+                                                                class_name="text-gray-500",
+                                                            ),
+                                                        ),
+                                                        class_name="text-sm mb-1",
+                                                    ),
+                                                    rx.el.div(
+                                                        rx.el.strong(
+                                                            "Definition:"
+                                                        ),
+                                                        rx.el.p(
+                                                            rx.cond(
+                                                                FilePrepState.pass_definition.length()
+                                                                > 0,
+                                                                FilePrepState.pass_definition,
+                                                                rx.el.em(
+                                                                    "Not Set",
+                                                                    class_name="text-gray-500",
+                                                                ),
+                                                            ),
+                                                            class_name="text-sm whitespace-pre-wrap mt-1",
+                                                        ),
+                                                    ),
+                                                    class_name="p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2 mb-4",
                                                 ),
                                                 rx.el.details(
                                                     rx.el.summary(
@@ -161,7 +207,7 @@ def mt_project_view() -> rx.Component:
                                                         class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
                                                     ),
                                                     rx.el.button(
-                                                        "Edit Metrics & Weights",
+                                                        "Edit Metrics, Weights & Pass Criteria",
                                                         on_click=lambda: FilePrepState.set_metrics_confirmed(
                                                             False
                                                         ),

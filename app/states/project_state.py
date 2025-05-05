@@ -45,6 +45,46 @@ class ProjectState(rx.State):
             metric: 5 for metric in EVERGREEN_METRICS
         }
     }
+    project_pass_threshold: dict[str, float | None] = {
+        "Default Project": None
+    }
+    project_pass_definition: dict[str, str] = {
+        "Default Project": ""
+    }
+
+    def _initialize_project_data(self, project_name: str):
+        """Initializes all data structures for a newly created project."""
+        if project_name not in self.project_language_pairs:
+            self.project_language_pairs[project_name] = []
+        if project_name not in self.project_mt_engines:
+            self.project_mt_engines[project_name] = []
+        if project_name not in self.project_readme_content:
+            self.project_readme_content[project_name] = (
+                DEFAULT_README_TEXT
+            )
+        if (
+            project_name
+            not in self.project_stakeholder_comments
+        ):
+            self.project_stakeholder_comments[
+                project_name
+            ] = ""
+        if (
+            project_name
+            not in self.project_included_metrics
+        ):
+            self.project_included_metrics[project_name] = {
+                "evergreen": list(EVERGREEN_METRICS.keys()),
+                "custom": [],
+            }
+        if project_name not in self.project_metric_weights:
+            self.project_metric_weights[project_name] = {
+                metric: 5 for metric in EVERGREEN_METRICS
+            }
+        if project_name not in self.project_pass_threshold:
+            self.project_pass_threshold[project_name] = None
+        if project_name not in self.project_pass_definition:
+            self.project_pass_definition[project_name] = ""
 
     @rx.event
     async def create_project(self):
@@ -62,21 +102,7 @@ class ProjectState(rx.State):
         ):
             self.projects.append(project_name)
             self.selected_project = project_name
-            self.project_language_pairs[project_name] = []
-            self.project_mt_engines[project_name] = []
-            self.project_readme_content[project_name] = (
-                DEFAULT_README_TEXT
-            )
-            self.project_stakeholder_comments[
-                project_name
-            ] = ""
-            self.project_included_metrics[project_name] = {
-                "evergreen": list(EVERGREEN_METRICS.keys()),
-                "custom": [],
-            }
-            self.project_metric_weights[project_name] = {
-                metric: 5 for metric in EVERGREEN_METRICS
-            }
+            self._initialize_project_data(project_name)
             self.new_project_name = ""
             logger.info(
                 f"Project '{project_name}' added to state."
@@ -117,62 +143,7 @@ class ProjectState(rx.State):
             logger.info(
                 f"Project '{project_name}' selected in state."
             )
-            if (
-                project_name
-                not in self.project_language_pairs
-            ):
-                self.project_language_pairs[
-                    project_name
-                ] = []
-            if project_name not in self.project_mt_engines:
-                self.project_mt_engines[project_name] = []
-            if (
-                project_name
-                not in self.project_readme_content
-            ):
-                self.project_readme_content[
-                    project_name
-                ] = DEFAULT_README_TEXT
-            if (
-                project_name
-                not in self.project_stakeholder_comments
-            ):
-                self.project_stakeholder_comments[
-                    project_name
-                ] = ""
-            if (
-                project_name
-                not in self.project_included_metrics
-            ):
-                self.project_included_metrics[
-                    project_name
-                ] = {
-                    "evergreen": list(
-                        EVERGREEN_METRICS.keys()
-                    ),
-                    "custom": [],
-                }
-            if (
-                project_name
-                not in self.project_metric_weights
-            ):
-                default_weights = {}
-                included_config = (
-                    self.project_included_metrics[
-                        project_name
-                    ]
-                )
-                for eg_metric in included_config.get(
-                    "evergreen", []
-                ):
-                    default_weights[eg_metric] = 5
-                for cust_metric in included_config.get(
-                    "custom", []
-                ):
-                    default_weights[cust_metric["name"]] = 5
-                self.project_metric_weights[
-                    project_name
-                ] = default_weights
+            self._initialize_project_data(project_name)
             yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project selection."
@@ -268,4 +239,26 @@ class ProjectState(rx.State):
             )
             if self.selected_project
             else None
+        )
+
+    @rx.var
+    def current_project_pass_threshold(
+        self,
+    ) -> float | None:
+        return (
+            self.project_pass_threshold.get(
+                self.selected_project, None
+            )
+            if self.selected_project
+            else None
+        )
+
+    @rx.var
+    def current_project_pass_definition(self) -> str:
+        return (
+            self.project_pass_definition.get(
+                self.selected_project, ""
+            )
+            if self.selected_project
+            else ""
         )

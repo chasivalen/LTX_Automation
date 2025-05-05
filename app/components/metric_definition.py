@@ -79,9 +79,14 @@ def custom_metric_item(
 def metric_weight_input(metric_info: dict) -> rx.Component:
     """Creates an input field for setting the weight of an included metric."""
     metric_name = metric_info["name"]
-    current_weight = FilePrepState.metric_weights.get(
-        metric_name, 5
-    ).to_string()
+    current_weight_val = FilePrepState.metric_weights.get(
+        metric_name
+    )
+    current_weight_str = rx.cond(
+        current_weight_val != None,
+        current_weight_val.to_string(),
+        "",
+    )
     return rx.el.div(
         rx.el.label(
             metric_name,
@@ -94,7 +99,8 @@ def metric_weight_input(metric_info: dict) -> rx.Component:
             min=1,
             max=10,
             step=1,
-            default_value=current_weight,
+            default_value=current_weight_str,
+            placeholder="1-10",
             on_change=lambda val: FilePrepState.set_metric_weight(
                 metric_name, val
             ),
@@ -116,10 +122,10 @@ def metric_weight_input(metric_info: dict) -> rx.Component:
 
 
 def metric_definition_component() -> rx.Component:
-    """Component for defining and weighting evaluation metrics."""
+    """Component for defining metrics, weights, and pass criteria."""
     return rx.el.div(
         rx.el.h4(
-            "Define Evaluation Metrics & Weights",
+            "Define Evaluation Metrics, Weights & Pass Criteria",
             class_name="text-xl font-medium mb-6 text-gray-700",
         ),
         rx.el.div(
@@ -201,14 +207,67 @@ def metric_definition_component() -> rx.Component:
                     rx.foreach(
                         FilePrepState.all_included_metrics,
                         metric_weight_input,
-                    )
+                    ),
+                    rx.el.div(
+                        rx.el.strong("SUM: "),
+                        rx.el.span(
+                            FilePrepState.total_metric_weight
+                        ),
+                        class_name="mt-4 p-3 border-t border-gray-300 text-lg font-semibold text-gray-700",
+                    ),
                 ),
                 rx.el.p(
                     "No metrics selected to assign weights.",
-                    class_name="text-gray-500 italic",
+                    class_name="text-gray-500 italic p-3",
                 ),
             ),
             class_name="mb-8",
+        ),
+        rx.el.div(
+            rx.el.h5(
+                "Pass Criteria",
+                class_name="text-lg font-medium mb-3 text-gray-600",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Pass Threshold:",
+                    html_for="pass-threshold",
+                    class_name="block text-sm font-medium text-gray-700 mb-1",
+                ),
+                rx.el.input(
+                    id="pass-threshold",
+                    type="number",
+                    step="any",
+                    placeholder="Enter numeric threshold (e.g., 3.5)",
+                    default_value=rx.cond(
+                        FilePrepState.pass_threshold
+                        != None,
+                        FilePrepState.pass_threshold.to_string(),
+                        "",
+                    ),
+                    on_change=FilePrepState.set_pass_threshold,
+                    class_name="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500",
+                ),
+                class_name="mb-4",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Pass Definition:",
+                    html_for="pass-definition",
+                    class_name="block text-sm font-medium text-gray-700 mb-1",
+                ),
+                rx.el.textarea(
+                    id="pass-definition",
+                    placeholder="Describe what constitutes a 'Pass' based on the evaluation...",
+                    default_value=FilePrepState.pass_definition,
+                    on_change=FilePrepState.set_pass_definition.debounce(
+                        300
+                    ),
+                    class_name="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]",
+                ),
+                class_name="mb-4",
+            ),
+            class_name="mb-8 p-4 border border-gray-200 rounded bg-white shadow-sm",
         ),
         rx.el.div(
             rx.el.button(
@@ -219,7 +278,7 @@ def metric_definition_component() -> rx.Component:
                 class_name="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
             ),
             rx.el.button(
-                "Confirm Metrics & Weights ➡",
+                "Confirm Metrics, Weights & Pass Criteria ➡",
                 on_click=FilePrepState.confirm_metrics,
                 disabled=FilePrepState.is_confirm_metrics_disabled,
                 class_name="px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150",

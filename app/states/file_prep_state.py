@@ -67,6 +67,8 @@ class FilePrepState(rx.State):
         metric: 5 for metric in EVERGREEN_METRICS
     }
     metrics_confirmed: bool = False
+    pass_threshold: float | None = None
+    pass_definition: str = ""
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -237,35 +239,25 @@ class FilePrepState(rx.State):
     @rx.event
     def set_readme_choice(self, choice: ReadmeChoice):
         self.readme_choice = choice
+        project_state = self.get_state(ProjectState)
+        saved_readme = (
+            project_state.project_readme_content.get(
+                project_state.selected_project,
+                self.default_readme,
+            )
+            if project_state
+            and project_state.selected_project
+            else self.default_readme
+        )
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
-            project_state = self.get_state(ProjectState)
-            saved_readme = (
-                project_state.project_readme_content.get(
-                    project_state.selected_project,
-                    self.default_readme,
-                )
-                if project_state
-                and project_state.selected_project
-                else self.default_readme
-            )
             self.custom_readme_content = (
-                saved_readme
-                if saved_readme != self.default_readme
-                else self.default_readme
+                self.default_readme
+                if saved_readme == self.default_readme
+                else saved_readme
             )
         elif choice == "new":
-            project_state = self.get_state(ProjectState)
-            saved_readme = (
-                project_state.project_readme_content.get(
-                    project_state.selected_project,
-                    self.default_readme,
-                )
-                if project_state
-                and project_state.selected_project
-                else self.default_readme
-            )
             self.custom_readme_content = (
                 ""
                 if saved_readme == self.default_readme
@@ -369,14 +361,14 @@ class FilePrepState(rx.State):
                 duration=3000,
             )
             return
-        if (
-            any(
-                (
-                    metric["name"] == name
-                    for metric in self.custom_metrics
-                )
+        if any(
+            (
+                metric["name"].lower() == name.lower()
+                for metric in self.custom_metrics
             )
-            or name in self.evergreen_metrics_definitions
+        ) or name.lower() in (
+            eg.lower()
+            for eg in self.evergreen_metrics_definitions
         ):
             yield rx.toast(
                 f"A metric with the name '{name}' already exists.",
@@ -405,19 +397,45 @@ class FilePrepState(rx.State):
         self, metric_name: str, weight_str: str
     ):
         try:
+            if weight_str == "":
+                if metric_name in self.metric_weights:
+                    del self.metric_weights[metric_name]
+                return
             weight = int(weight_str)
             if 1 <= weight <= 10:
                 self.metric_weights[metric_name] = weight
             else:
+                if metric_name in self.metric_weights:
+                    del self.metric_weights[metric_name]
                 yield rx.toast(
                     f"Weight for '{metric_name}' must be between 1 and 10.",
                     duration=3000,
                 )
         except ValueError:
+            if metric_name in self.metric_weights:
+                del self.metric_weights[metric_name]
             yield rx.toast(
                 f"Invalid weight for '{metric_name}'. Please enter a number.",
                 duration=3000,
             )
+
+    @rx.event
+    def set_pass_threshold(self, threshold_str: str):
+        try:
+            if threshold_str == "":
+                self.pass_threshold = None
+            else:
+                self.pass_threshold = float(threshold_str)
+        except ValueError:
+            self.pass_threshold = None
+            yield rx.toast(
+                "Invalid number for Pass Threshold.",
+                duration=3000,
+            )
+
+    @rx.event
+    def set_pass_definition(self, definition: str):
+        self.pass_definition = definition
 
     @rx.event
     async def confirm_metrics(self):
@@ -430,14 +448,17 @@ class FilePrepState(rx.State):
             )
             return
         for metric in self.all_included_metrics:
-            if (
-                metric["name"] not in self.metric_weights
-                or not 1
-                <= self.metric_weights[metric["name"]]
-                <= 10
-            ):
+            metric_name = metric["name"]
+            if metric_name not in self.metric_weights:
                 yield rx.toast(
-                    f"Invalid or missing weight for metric: {metric['name']}. Weight must be 1-10.",
+                    f"Missing weight for metric: '{metric_name}'. Please enter a value between 1 and 10.",
+                    duration=4000,
+                )
+                return
+            weight = self.metric_weights[metric_name]
+            if not 1 <= weight <= 10:
+                yield rx.toast(
+                    f"Invalid weight for metric: '{metric_name}'. Weight must be 1-10.",
                     duration=4000,
                 )
                 return
@@ -448,8 +469,9 @@ class FilePrepState(rx.State):
                 duration=4000,
             )
             return
+        project_name = project_state.selected_project
         project_state.project_included_metrics[
-            project_state.selected_project
+            project_name
         ] = {
             "evergreen": list(
                 self.included_evergreen_metrics
@@ -457,48 +479,47 @@ class FilePrepState(rx.State):
             "custom": list(self.custom_metrics),
         }
         project_state.project_metric_weights[
-            project_state.selected_project
+            project_name
         ] = dict(self.metric_weights)
+        project_state.project_pass_threshold[
+            project_name
+        ] = self.pass_threshold
+        project_state.project_pass_definition[
+            project_name
+        ] = self.pass_definition
         self.metrics_confirmed = True
         yield rx.toast(
-            "Metrics and Weights Confirmed! Configuration complete.",
+            "Metrics, Weights & Pass Criteria Confirmed! Configuration complete.",
             duration=3000,
         )
 
     def _reset_downstream_of_pairs(self):
         """Resets state from Engines onwards."""
         self.engines_confirmed = False
-        self.readme_confirmed = False
-        self.stakeholder_confirmed = False
-        self.metrics_confirmed = False
-        self.readme_choice = None
-        self.custom_readme_content = self.default_readme
-        self.stakeholder_comments = ""
+        self._reset_downstream_of_engines()
         self.selected_engines = []
         self.new_engine_name = ""
-        self._reset_metric_state()
 
     def _reset_downstream_of_engines(self):
         """Resets state from ReadMe onwards."""
         self.readme_confirmed = False
-        self.stakeholder_confirmed = False
-        self.metrics_confirmed = False
+        self._reset_downstream_of_readme()
         self.readme_choice = None
-        self.stakeholder_comments = ""
-        self._reset_metric_state()
+        self.custom_readme_content = self.default_readme
 
     def _reset_downstream_of_readme(self):
         """Resets state from Stakeholder onwards."""
         self.stakeholder_confirmed = False
-        self.metrics_confirmed = False
-        self._reset_metric_state()
+        self._reset_downstream_of_stakeholder()
+        self.stakeholder_comments = ""
 
     def _reset_downstream_of_stakeholder(self):
-        """Resets state from Metrics onwards."""
+        """Resets state from Metrics/Pass Criteria onwards."""
         self.metrics_confirmed = False
+        self._reset_metric_and_pass_state()
 
-    def _reset_metric_state(self):
-        """Resets only the metric-related state to defaults."""
+    def _reset_metric_and_pass_state(self):
+        """Resets only the metric and pass criteria state to defaults."""
         self.included_evergreen_metrics = list(
             EVERGREEN_METRICS.keys()
         )
@@ -508,14 +529,16 @@ class FilePrepState(rx.State):
         self.metric_weights = {
             metric: 5 for metric in EVERGREEN_METRICS
         }
+        self.pass_threshold = None
+        self.pass_definition = ""
 
     def _load_project_text_and_metrics(self, project_state):
-        """Loads ReadMe, Stakeholder data, and Metric settings from ProjectState."""
+        """Loads ReadMe, Stakeholder, Metric settings, and Pass Criteria from ProjectState."""
         if not project_state.selected_project:
-            self._reset_metric_state()
             self.custom_readme_content = self.default_readme
-            self.stakeholder_comments = ""
             self.readme_choice = None
+            self.stakeholder_comments = ""
+            self._reset_metric_and_pass_state()
             return
         project_name = project_state.selected_project
         saved_readme = (
@@ -554,16 +577,33 @@ class FilePrepState(rx.State):
             self.custom_metrics = list(
                 saved_metrics_config.get("custom", [])
             )
-            self.metric_weights = dict(saved_weights)
+            loaded_weights = dict(saved_weights)
+            current_weights = {}
             all_included_names = (
                 self.included_evergreen_metrics
                 + [cm["name"] for cm in self.custom_metrics]
             )
             for name in all_included_names:
-                if name not in self.metric_weights:
-                    self.metric_weights[name] = 5
+                current_weights[name] = (
+                    loaded_weights.get(name, 5)
+                    if 1
+                    <= loaded_weights.get(name, 5)
+                    <= 10
+                    else 5
+                )
+            self.metric_weights = current_weights
         else:
-            self._reset_metric_state()
+            self._reset_metric_and_pass_state()
+        self.pass_threshold = (
+            project_state.project_pass_threshold.get(
+                project_name, None
+            )
+        )
+        self.pass_definition = (
+            project_state.project_pass_definition.get(
+                project_name, ""
+            )
+        )
 
     @rx.event
     def reset_state(self):
@@ -576,35 +616,31 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
-        """Allows editing pairs again, resets downstream state."""
         self.pairs_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_pairs()
 
     @rx.event
     def set_engines_confirmed(self, confirmed: bool):
-        """Allows editing engines again, resets downstream state."""
         self.engines_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_engines()
 
     @rx.event
     def set_readme_confirmed(self, confirmed: bool):
-        """Allows editing ReadMe again, resets downstream state."""
         self.readme_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_readme()
 
     @rx.event
     def set_stakeholder_confirmed(self, confirmed: bool):
-        """Allows editing Stakeholder comments again, resets downstream state."""
         self.stakeholder_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_stakeholder()
 
     @rx.event
     def set_metrics_confirmed(self, confirmed: bool):
-        """Allows editing Metrics again."""
+        """Allows editing Metrics & Pass Criteria again."""
         self.metrics_confirmed = confirmed
 
     @rx.var
@@ -654,12 +690,17 @@ class FilePrepState(rx.State):
         if not self.all_included_metrics:
             return True
         for metric in self.all_included_metrics:
-            if metric["name"] not in self.metric_weights:
+            metric_name = metric["name"]
+            if metric_name not in self.metric_weights:
+                return True
+            weight = self.metric_weights[metric_name]
+            if not 1 <= weight <= 10:
                 return True
         return False
 
     @rx.var
     def final_readme_content(self) -> str:
+        """Determines the Read Me content to be saved based on the choice."""
         if self.readme_choice == "default":
             return self.default_readme
         elif self.readme_choice in ["customize", "new"]:
@@ -689,3 +730,13 @@ class FilePrepState(rx.State):
                 }
             )
         return metrics
+
+    @rx.var
+    def total_metric_weight(self) -> int:
+        """Calculates the sum of weights for all included metrics."""
+        total = 0
+        for metric in self.all_included_metrics:
+            total += self.metric_weights.get(
+                metric["name"], 0
+            )
+        return total
