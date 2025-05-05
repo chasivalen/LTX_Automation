@@ -1,5 +1,9 @@
 import reflex as rx
 from typing import Optional
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ProjectState(rx.State):
@@ -23,6 +27,9 @@ class ProjectState(rx.State):
         from app.states.file_prep_state import FilePrepState
 
         project_name = self.new_project_name.strip()
+        logger.info(
+            f"Attempting to create project: {project_name}"
+        )
         if (
             project_name
             and project_name not in self.projects
@@ -31,27 +38,35 @@ class ProjectState(rx.State):
             self.selected_project = project_name
             self.project_language_pairs[project_name] = []
             self.new_project_name = ""
+            logger.info(
+                f"Project '{project_name}' added to state."
+            )
             app_state = await self.get_state(AppState)
-            async for (
-                event
-            ) in app_state.set_project_selected(True):
-                yield event
             file_prep_state = await self.get_state(
                 FilePrepState
             )
-            async for (
-                event
-            ) in file_prep_state.reset_state():
-                yield event
+            logger.info(
+                "AppState and FilePrepState retrieved."
+            )
+            yield app_state.set_project_selected(True)
+            logger.info(
+                "Yielded AppState.set_project_selected(True)"
+            )
+            yield file_prep_state.reset_state
+            logger.info("Yielded FilePrepState.reset_state")
             yield rx.toast(
                 f"Project '{project_name}' created.",
                 duration=3000,
             )
+            logger.info("Project creation toast yielded.")
         else:
             error_msg = (
                 f"Project name '{project_name}' is invalid or already exists."
                 if project_name
                 else "Project name cannot be empty."
+            )
+            logger.warning(
+                f"Project creation failed: {error_msg}"
             )
             yield rx.toast(error_msg, duration=4000)
 
@@ -63,24 +78,40 @@ class ProjectState(rx.State):
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
 
+        logger.info(
+            f"Attempting to select project: {project_name}"
+        )
         if project_name and project_name in self.projects:
             self.selected_project = project_name
+            logger.info(
+                f"Project '{project_name}' selected in state."
+            )
             app_state = await self.get_state(AppState)
-            async for (
-                event
-            ) in app_state.set_project_selected(True):
-                yield event
             file_prep_state = await self.get_state(
                 FilePrepState
             )
-            async for (
-                event
-            ) in file_prep_state.reset_state():
-                yield event
+            logger.info(
+                "AppState and FilePrepState retrieved for project selection."
+            )
+            yield app_state.set_project_selected(True)
+            logger.info(
+                "Yielded AppState.set_project_selected(True) for project selection."
+            )
+            yield file_prep_state.reset_state
+            logger.info(
+                "Yielded FilePrepState.reset_state for project selection."
+            )
         elif project_name:
+            logger.warning(
+                f"Project selection failed: Project '{project_name}' not found."
+            )
             yield rx.toast(
                 f"Error: Project '{project_name}' not found.",
                 duration=4000,
+            )
+        else:
+            logger.warning(
+                "Project selection failed: No project name provided."
             )
 
     @rx.var
