@@ -22,12 +22,15 @@ class ProjectState(rx.State):
             self.new_project_name
             and self.new_project_name not in self.projects
         ):
-            self.projects.append(self.new_project_name)
-            self.selected_project = self.new_project_name
-            self.project_language_pairs[
-                self.new_project_name
-            ] = []
-            self.new_project_name = ""
+            async with self:
+                self.projects.append(self.new_project_name)
+                self.selected_project = (
+                    self.new_project_name
+                )
+                self.project_language_pairs[
+                    self.new_project_name
+                ] = []
+                self.new_project_name = ""
             app_state = await self.get_state(AppState)
             yield app_state.set_project_selected(True)
             file_prep_state = await self.get_state(
@@ -47,7 +50,8 @@ class ProjectState(rx.State):
         from app.states.file_prep_state import FilePrepState
 
         if project_name:
-            self.selected_project = project_name
+            async with self:
+                self.selected_project = project_name
             app_state = await self.get_state(AppState)
             yield app_state.set_project_selected(True)
             file_prep_state = await self.get_state(
