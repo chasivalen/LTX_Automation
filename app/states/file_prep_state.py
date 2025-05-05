@@ -54,17 +54,13 @@ class FilePrepState(rx.State):
                 self.current_source_language,
                 self.current_target_language,
             )
-            is_duplicate = False
-            for pair in self.selected_pairs_for_session:
-                if (
-                    pair[0] == new_pair[0]
-                    and pair[1] == new_pair[1]
-                ):
-                    is_duplicate = True
-                    break
-            if not is_duplicate:
-                self.selected_pairs_for_session.append(
-                    new_pair
+            if (
+                new_pair
+                not in self.selected_pairs_for_session
+            ):
+                self.selected_pairs_for_session = (
+                    self.selected_pairs_for_session
+                    + [new_pair]
                 )
                 self.current_source_language = None
                 self.current_target_language = None
@@ -73,9 +69,21 @@ class FilePrepState(rx.State):
                     "This language pair has already been added.",
                     duration=3000,
                 )
+        elif (
+            self.current_source_language
+            and self.current_target_language
+            and (
+                self.current_source_language
+                == self.current_target_language
+            )
+        ):
+            yield rx.toast(
+                "Source and Target languages cannot be the same.",
+                duration=3000,
+            )
         else:
             yield rx.toast(
-                "Please select two different languages.",
+                "Please select both a Source and Target language.",
                 duration=3000,
             )
 
@@ -87,10 +95,7 @@ class FilePrepState(rx.State):
         self.selected_pairs_for_session = [
             pair
             for pair in self.selected_pairs_for_session
-            if not (
-                pair[0] == pair_to_remove[0]
-                and pair[1] == pair_to_remove[1]
-            )
+            if pair != pair_to_remove
         ]
 
     @rx.event
@@ -109,13 +114,15 @@ class FilePrepState(rx.State):
             project_state.project_language_pairs[
                 project_state.selected_project
             ] = list(self.selected_pairs_for_session)
-            self.pairs_confirmed = True
+            async with self:
+                self.pairs_confirmed = True
             yield rx.toast(
                 "Language pairs confirmed!", duration=3000
             )
         else:
             yield rx.toast(
-                "Error: No project selected.", duration=4000
+                "Error: No project selected. Cannot confirm pairs.",
+                duration=4000,
             )
 
     @rx.event
