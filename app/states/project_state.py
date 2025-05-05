@@ -41,18 +41,11 @@ class ProjectState(rx.State):
             logger.info(
                 f"Project '{project_name}' added to state."
             )
-            app_state = await self.get_state(AppState)
-            file_prep_state = await self.get_state(
-                FilePrepState
-            )
-            logger.info(
-                "AppState and FilePrepState retrieved."
-            )
-            yield app_state.set_project_selected(True)
+            yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True)"
             )
-            yield file_prep_state.reset_state
+            yield FilePrepState.reset_state
             logger.info("Yielded FilePrepState.reset_state")
             yield rx.toast(
                 f"Project '{project_name}' created.",
@@ -86,18 +79,11 @@ class ProjectState(rx.State):
             logger.info(
                 f"Project '{project_name}' selected in state."
             )
-            app_state = await self.get_state(AppState)
-            file_prep_state = await self.get_state(
-                FilePrepState
-            )
-            logger.info(
-                "AppState and FilePrepState retrieved for project selection."
-            )
-            yield app_state.set_project_selected(True)
+            yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project selection."
             )
-            yield file_prep_state.reset_state
+            yield FilePrepState.reset_state
             logger.info(
                 "Yielded FilePrepState.reset_state for project selection."
             )
@@ -113,6 +99,10 @@ class ProjectState(rx.State):
             logger.warning(
                 "Project selection failed: No project name provided."
             )
+
+    @rx.event
+    def set_new_project_name(self, name: str):
+        self.new_project_name = name
 
     @rx.var
     def has_selected_project(self) -> bool:
