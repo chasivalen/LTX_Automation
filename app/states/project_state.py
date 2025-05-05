@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class ProjectState(rx.State):
-    """Manages project creation and selection for the LTX Bench flow."""
+    """Manages project creation, selection, and associated data (like language pairs) for the LTX Bench flow."""
 
     projects: list[str] = ["Default Project"]
     selected_project: str | None = None
@@ -14,19 +14,22 @@ class ProjectState(rx.State):
 
     @rx.event
     async def create_project(self):
-        """Creates a new project if the name is not empty and not already taken."""
+        """
+        Creates a new project, selects it, and notifies AppState.
+        Resets FilePrepState for the new project context.
+        Shows a toast message on failure (invalid name or duplicate).
+        """
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
 
+        project_name = self.new_project_name.strip()
         if (
-            self.new_project_name
-            and self.new_project_name not in self.projects
+            project_name
+            and project_name not in self.projects
         ):
-            self.projects.append(self.new_project_name)
-            self.selected_project = self.new_project_name
-            self.project_language_pairs[
-                self.new_project_name
-            ] = []
+            self.projects.append(project_name)
+            self.selected_project = project_name
+            self.project_language_pairs[project_name] = []
             self.new_project_name = ""
             app_state = await self.get_state(AppState)
             yield app_state.set_project_selected(True)
@@ -34,19 +37,27 @@ class ProjectState(rx.State):
                 FilePrepState
             )
             yield file_prep_state.reset_state()
-        else:
             yield rx.toast(
-                f"Project name '{self.new_project_name}' is invalid or already exists.",
-                duration=4000,
+                f"Project '{project_name}' created.",
+                duration=3000,
             )
+        else:
+            error_msg = (
+                f"Project name '{project_name}' is invalid or already exists."
+                if project_name
+                else "Project name cannot be empty."
+            )
+            yield rx.toast(error_msg, duration=4000)
 
     @rx.event
     async def select_project(self, project_name: str):
-        """Selects an existing project for the LTX Bench flow."""
+        """
+        Selects an existing project, notifies AppState, and resets FilePrepState.
+        """
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
 
-        if project_name:
+        if project_name and project_name in self.projects:
             self.selected_project = project_name
             app_state = await self.get_state(AppState)
             yield app_state.set_project_selected(True)
@@ -54,10 +65,15 @@ class ProjectState(rx.State):
                 FilePrepState
             )
             yield file_prep_state.reset_state()
+        elif project_name:
+            yield rx.toast(
+                f"Error: Project '{project_name}' not found.",
+                duration=4000,
+            )
 
     @rx.var
     def has_selected_project(self) -> bool:
-        """Checks if a project is currently selected within the LTX Bench flow."""
+        """Checks if a project is currently selected."""
         return self.selected_project is not None
 
     @rx.var
