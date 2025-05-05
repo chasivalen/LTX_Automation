@@ -21,10 +21,10 @@ def sidebar_link(text: str, view: str) -> rx.Component:
 
 
 def sidebar() -> rx.Component:
-    """The sidebar component for navigation."""
+    """The sidebar component for LTX Bench navigation."""
     return rx.el.div(
         rx.el.h4(
-            "LTX Bench",
+            "LTX Bench Menu",
             class_name="text-lg font-semibold mb-3 text-gray-800 px-4 pt-4",
         ),
         rx.el.ul(
@@ -37,21 +37,20 @@ def sidebar() -> rx.Component:
             ),
             class_name="list-none p-0 px-2",
         ),
-        rx.el.hr(class_name="my-4 border-gray-200"),
-        rx.el.h4(
-            "SEO Automation",
-            class_name="text-lg font-semibold mb-3 text-gray-800 px-4",
-        ),
-        rx.el.ul(
-            sidebar_link("SEO Features", "seo_automation"),
-            class_name="list-none p-0 px-2",
-        ),
-        rx.el.button(
-            "Change Project",
-            on_click=lambda: AppState.set_project_selected(
-                False
+        rx.el.div(
+            rx.el.button(
+                "Change Project",
+                on_click=lambda: AppState.set_project_selected(
+                    False
+                ),
+                class_name="mb-2 w-full px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
             ),
-            class_name="mt-auto mx-4 mb-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 w-[calc(100%-2rem)]",
+            rx.el.button(
+                "Change Mode (SEO/LTX)",
+                on_click=AppState.reset_initial_choice,
+                class_name="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600",
+            ),
+            class_name="mt-auto px-4 pb-4 pt-2 border-t border-gray-200",
         ),
         class_name="w-64 h-full bg-white border-r border-gray-200 flex flex-col fixed top-0 left-0 pt-16",
     )

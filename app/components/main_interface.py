@@ -5,10 +5,10 @@ from app.components.file_prep_view import file_prep_view
 
 
 def default_view() -> rx.Component:
-    """The default view shown when a project is selected but no specific task."""
+    """The default view shown when a project is selected but no specific task (LTX Bench)."""
     return rx.el.div(
         rx.el.h3(
-            "Welcome to your Project",
+            "Welcome to LTX Bench",
             class_name="text-2xl font-semibold mb-4 text-gray-800",
         ),
         rx.el.p(
@@ -16,7 +16,7 @@ def default_view() -> rx.Component:
             class_name="text-gray-600 mb-2",
         ),
         rx.el.p(
-            "Please select an option from the sidebar to begin.",
+            "Please select an option from the sidebar menu to begin.",
             class_name="text-gray-600",
         ),
         class_name="p-6",
@@ -34,12 +34,12 @@ def placeholder_view(title: str) -> rx.Component:
             f"Placeholder content for {title}.",
             class_name="text-gray-600",
         ),
-        class_name="p-6",
+        class_name="p-6 bg-white rounded-lg shadow border border-gray-200 max-w-2xl",
     )
 
 
 def main_interface_component() -> rx.Component:
-    """Component displaying the main content based on sidebar selection."""
+    """Component displaying the main content based on LTX Bench sidebar selection."""
     return rx.el.div(
         rx.match(
             AppState.selected_view,
@@ -53,11 +53,7 @@ def main_interface_component() -> rx.Component:
                 "update_tableau",
                 placeholder_view("Update Tableau"),
             ),
-            (
-                "seo_automation",
-                placeholder_view("SEO Automation"),
-            ),
             default_view(),
         ),
-        class_name="flex-grow p-6",
+        class_name="p-6",
     )

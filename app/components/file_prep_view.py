@@ -18,7 +18,7 @@ def project_type_button(text: ProjectType) -> rx.Component:
 
 
 def file_prep_view() -> rx.Component:
-    """The view displayed when 'File Prep' is selected."""
+    """The view displayed when 'File Prep' is selected within LTX Bench."""
     return rx.el.div(
         rx.el.h3(
             "File Prep: Select Project Type",

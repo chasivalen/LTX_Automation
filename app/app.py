@@ -1,54 +1,66 @@
 """LTX Automation App"""
 
 import reflex as rx
+from app.states.app_state import AppState
+from app.states.project_state import ProjectState
+from app.components.initial_selection import (
+    initial_selection_component,
+)
 from app.components.project_selection import (
     project_selection_component,
 )
 from app.components.main_interface import (
     main_interface_component,
+    placeholder_view,
 )
 from app.components.sidebar import sidebar
-from app.states.app_state import AppState
-from app.states.project_state import ProjectState
+from app.components.header import header_component
+
+
+def seo_view_component() -> rx.Component:
+    """The view shown when SEO is selected initially."""
+    return rx.el.div(
+        placeholder_view("SEO Automation"),
+        class_name="p-6 flex justify-center items-start min-h-[calc(100vh-4rem)]",
+    )
+
+
+def ltx_bench_view_component() -> rx.Component:
+    """The view structure for the LTX Bench workflow."""
+    return rx.cond(
+        AppState.project_selected,
+        rx.el.div(
+            sidebar(),
+            rx.el.main(
+                main_interface_component(),
+                class_name="ml-64 flex-grow",
+            ),
+            class_name="flex min-h-[calc(100vh-4rem)]",
+        ),
+        rx.el.div(
+            project_selection_component(),
+            class_name="flex justify-center items-center min-h-[calc(100vh-4rem)]",
+        ),
+    )
 
 
 def index() -> rx.Component:
     """The main page of the app."""
     return rx.el.div(
+        header_component(),
         rx.el.div(
-            rx.el.h1(
-                "LTX Automation",
-                class_name="text-3xl font-bold text-gray-900",
-            ),
-            rx.el.p(
-                f"Project: {ProjectState.selected_project}",
-                class_name=rx.cond(
-                    AppState.project_selected,
-                    "text-sm text-gray-600",
-                    "hidden",
-                ),
-            ),
-            class_name="fixed top-0 left-0 right-0 h-16 px-6 flex items-center justify-between bg-white border-b border-gray-200 z-10",
-        ),
-        rx.el.div(
-            rx.cond(
-                AppState.project_selected,
+            rx.match(
+                AppState.initial_choice,
+                ("SEO", seo_view_component()),
+                ("LTX Bench", ltx_bench_view_component()),
                 rx.el.div(
-                    sidebar(),
-                    rx.el.main(
-                        main_interface_component(),
-                        class_name="ml-64 flex-grow",
-                    ),
-                    class_name="flex min-h-screen pt-16",
-                ),
-                rx.el.div(
-                    project_selection_component(),
-                    class_name="pt-16 flex justify-center items-center min-h-screen",
+                    initial_selection_component(),
+                    class_name="flex justify-center items-center min-h-[calc(100vh-4rem)]",
                 ),
             ),
-            class_name="w-full",
+            class_name="pt-16",
         ),
-        class_name="min-h-screen bg-gray-50 relative",
+        class_name="min-h-screen bg-gray-50",
     )
 
 
