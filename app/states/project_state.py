@@ -32,11 +32,17 @@ class ProjectState(rx.State):
             self.project_language_pairs[project_name] = []
             self.new_project_name = ""
             app_state = await self.get_state(AppState)
-            yield app_state.set_project_selected(True)
+            async for (
+                event
+            ) in app_state.set_project_selected(True):
+                yield event
             file_prep_state = await self.get_state(
                 FilePrepState
             )
-            yield file_prep_state.reset_state()
+            async for (
+                event
+            ) in file_prep_state.reset_state():
+                yield event
             yield rx.toast(
                 f"Project '{project_name}' created.",
                 duration=3000,
@@ -60,11 +66,17 @@ class ProjectState(rx.State):
         if project_name and project_name in self.projects:
             self.selected_project = project_name
             app_state = await self.get_state(AppState)
-            yield app_state.set_project_selected(True)
+            async for (
+                event
+            ) in app_state.set_project_selected(True):
+                yield event
             file_prep_state = await self.get_state(
                 FilePrepState
             )
-            yield file_prep_state.reset_state()
+            async for (
+                event
+            ) in file_prep_state.reset_state():
+                yield event
         elif project_name:
             yield rx.toast(
                 f"Error: Project '{project_name}' not found.",
