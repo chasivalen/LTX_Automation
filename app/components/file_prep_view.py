@@ -1,5 +1,9 @@
 import reflex as rx
 from app.states.app_state import AppState, ProjectType
+from app.states.file_prep_state import FilePrepState
+from app.components.language_pair_selector import (
+    language_pair_selector,
+)
 
 
 def project_type_button(text: ProjectType) -> rx.Component:
@@ -14,6 +18,36 @@ def project_type_button(text: ProjectType) -> rx.Component:
             "px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium",
             "px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium",
         ),
+    )
+
+
+def mt_project_view() -> rx.Component:
+    """The view for MT projects, showing language pair selection or next steps."""
+    return rx.cond(
+        FilePrepState.pairs_confirmed,
+        rx.el.div(
+            rx.el.h4(
+                "MT Project - Language Pairs Confirmed",
+                class_name="text-xl font-medium mb-4 text-gray-700",
+            ),
+            rx.el.p(
+                "Language pairs have been selected and confirmed.",
+                class_name="text-gray-600 mb-2",
+            ),
+            rx.el.p(
+                "Placeholder for the next step in MT File Preparation (e.g., file upload).",
+                class_name="text-gray-600 italic",
+            ),
+            rx.el.button(
+                "Edit Language Pairs",
+                on_click=lambda: FilePrepState.set_pairs_confirmed(
+                    False
+                ),
+                class_name="mt-4 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600",
+            ),
+            class_name="p-4 border border-gray-200 rounded-lg bg-green-50",
+        ),
+        language_pair_selector(),
     )
 
 
@@ -32,20 +66,7 @@ def file_prep_view() -> rx.Component:
         ),
         rx.match(
             AppState.file_prep_project_type,
-            (
-                "MT",
-                rx.el.div(
-                    rx.el.h4(
-                        "MT Project Options",
-                        class_name="text-xl font-medium mb-4 text-gray-700",
-                    ),
-                    rx.el.p(
-                        "Placeholder for Machine Translation specific file preparation steps.",
-                        class_name="text-gray-600",
-                    ),
-                    class_name="p-4 border border-gray-200 rounded-lg bg-gray-50",
-                ),
-            ),
+            ("MT", mt_project_view()),
             (
                 "LLM",
                 rx.el.div(

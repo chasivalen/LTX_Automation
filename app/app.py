@@ -3,6 +3,7 @@
 import reflex as rx
 from app.states.app_state import AppState
 from app.states.project_state import ProjectState
+from app.states.file_prep_state import FilePrepState
 from app.components.initial_selection import (
     initial_selection_component,
 )
