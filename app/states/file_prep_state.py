@@ -237,9 +237,11 @@ class FilePrepState(rx.State):
             )
 
     @rx.event
-    def set_readme_choice(self, choice: ReadmeChoice):
+    async def set_readme_choice(self, choice: ReadmeChoice):
+        from app.states.project_state import ProjectState
+
         self.readme_choice = choice
-        project_state = self.get_state(ProjectState)
+        project_state = await self.get_state(ProjectState)
         saved_readme = (
             project_state.project_readme_content.get(
                 project_state.selected_project,
@@ -532,7 +534,9 @@ class FilePrepState(rx.State):
         self.pass_threshold = None
         self.pass_definition = ""
 
-    def _load_project_text_and_metrics(self, project_state):
+    async def _load_project_text_and_metrics(
+        self, project_state
+    ):
         """Loads ReadMe, Stakeholder, Metric settings, and Pass Criteria from ProjectState."""
         if not project_state.selected_project:
             self.custom_readme_content = self.default_readme
