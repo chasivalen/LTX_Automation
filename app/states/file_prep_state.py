@@ -1,5 +1,12 @@
 import reflex as rx
-from typing import Optional, Literal, TypedDict
+from typing import (
+    Optional,
+    Literal,
+    TypedDict,
+    List,
+    Dict,
+    Tuple,
+)
 
 Language = Literal[
     "English",
@@ -23,6 +30,83 @@ EVERGREEN_METRICS: dict[str, str] = {
 class CustomMetric(TypedDict):
     name: str
     definition: str
+
+
+class ExcelColumn(TypedDict):
+    name: str
+    id: str
+    required: bool
+    editable: bool
+
+
+DEFAULT_EXCEL_COLUMNS: List[ExcelColumn] = [
+    ExcelColumn(
+        name="File Name",
+        id="file_name",
+        required=True,
+        editable=False,
+    ),
+    ExcelColumn(
+        name="Source",
+        id="source",
+        required=True,
+        editable=False,
+    ),
+    ExcelColumn(
+        name="Target",
+        id="target",
+        required=True,
+        editable=False,
+    ),
+    ExcelColumn(
+        name="Word Count",
+        id="word_count",
+        required=False,
+        editable=True,
+    ),
+    ExcelColumn(
+        name="Pre-Eval",
+        id="pre_eval",
+        required=True,
+        editable=True,
+    ),
+    ExcelColumn(
+        name="Applicable Word Count",
+        id="applicable_word_count",
+        required=False,
+        editable=True,
+    ),
+    ExcelColumn(
+        name="Overall",
+        id="overall",
+        required=True,
+        editable=True,
+    ),
+    ExcelColumn(
+        name="Rating (Not Weighted)",
+        id="rating_not_weighted",
+        required=True,
+        editable=False,
+    ),
+    ExcelColumn(
+        name="Rating (Weighted)",
+        id="rating_weighted",
+        required=True,
+        editable=False,
+    ),
+    ExcelColumn(
+        name="Weighted Rating Length",
+        id="weighted_rating_length",
+        required=False,
+        editable=True,
+    ),
+    ExcelColumn(
+        name="Additional Notes",
+        id="additional_notes",
+        required=False,
+        editable=True,
+    ),
+]
 
 
 class FilePrepState(rx.State):
@@ -69,6 +153,10 @@ class FilePrepState(rx.State):
     metrics_confirmed: bool = False
     pass_threshold: float | None = None
     pass_definition: str = ""
+    excel_columns: list[ExcelColumn] = DEFAULT_EXCEL_COLUMNS
+    columns_confirmed: bool = False
+    editing_column_index: Optional[int] = None
+    editing_column_name: str = ""
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -221,7 +309,7 @@ class FilePrepState(rx.State):
             project_state.project_mt_engines[
                 project_state.selected_project
             ] = list(self.selected_engines)
-            self._load_project_text_and_metrics(
+            self._load_project_data_after_engines(
                 project_state
             )
             self.engines_confirmed = True
@@ -295,6 +383,11 @@ class FilePrepState(rx.State):
         ] = final_content
         self.readme_confirmed = True
         self._reset_downstream_of_readme()
+        self.stakeholder_comments = (
+            project_state.project_stakeholder_comments.get(
+                project_state.selected_project, ""
+            )
+        )
         yield rx.toast(
             "Read Me Instructions Confirmed! Add Stakeholder Perspective next.",
             duration=3000,
@@ -320,6 +413,7 @@ class FilePrepState(rx.State):
         ] = self.stakeholder_comments
         self.stakeholder_confirmed = True
         self._reset_downstream_of_stakeholder()
+        self._load_metric_pass_column_data(project_state)
         yield rx.toast(
             "Stakeholder Perspective Confirmed! Define Metrics next.",
             duration=3000,
@@ -327,23 +421,18 @@ class FilePrepState(rx.State):
 
     @rx.event
     def toggle_evergreen_metric(self, metric_name: str):
-        if metric_name in self.included_evergreen_metrics:
-            self.included_evergreen_metrics = [
-                m
-                for m in self.included_evergreen_metrics
-                if m != metric_name
-            ]
-            temp_weights = self.metric_weights.copy()
+        temp_metrics = list(self.included_evergreen_metrics)
+        temp_weights = self.metric_weights.copy()
+        if metric_name in temp_metrics:
+            temp_metrics.remove(metric_name)
             if metric_name in temp_weights:
                 del temp_weights[metric_name]
-            self.metric_weights = temp_weights
         else:
-            self.included_evergreen_metrics.append(
-                metric_name
-            )
-            temp_weights = self.metric_weights.copy()
-            temp_weights[metric_name] = 5
-            self.metric_weights = temp_weights
+            temp_metrics.append(metric_name)
+            if metric_name not in temp_weights:
+                temp_weights[metric_name] = 5
+        self.included_evergreen_metrics = temp_metrics
+        self.metric_weights = temp_weights
 
     @rx.event
     def set_new_custom_metric_name(self, name: str):
@@ -367,15 +456,13 @@ class FilePrepState(rx.State):
                 duration=3000,
             )
             return
-        if any(
-            (
-                metric["name"].lower() == name.lower()
-                for metric in self.custom_metrics
-            )
-        ) or name.lower() in (
+        all_existing_names_lower = [
+            m["name"].lower() for m in self.custom_metrics
+        ] + [
             eg.lower()
             for eg in self.evergreen_metrics_definitions
-        ):
+        ]
+        if name.lower() in all_existing_names_lower:
             yield rx.toast(
                 f"A metric with the name '{name}' already exists.",
                 duration=3000,
@@ -385,7 +472,8 @@ class FilePrepState(rx.State):
             CustomMetric(name=name, definition=definition)
         )
         temp_weights = self.metric_weights.copy()
-        temp_weights[name] = 5
+        if name not in temp_weights:
+            temp_weights[name] = 5
         self.metric_weights = temp_weights
         self.new_custom_metric_name = ""
         self.new_custom_metric_definition = ""
@@ -420,15 +508,15 @@ class FilePrepState(rx.State):
                 if metric_name in temp_weights:
                     del temp_weights[metric_name]
                 yield rx.toast(
-                    f"Weight for '{metric_name}' must be between 1 and 10.",
-                    duration=3000,
+                    f"Weight for '{metric_name}' must be between 1 and 10. Weight cleared.",
+                    duration=4000,
                 )
         except ValueError:
             if metric_name in temp_weights:
                 del temp_weights[metric_name]
             yield rx.toast(
-                f"Invalid weight for '{metric_name}'. Please enter a number.",
-                duration=3000,
+                f"Invalid weight for '{metric_name}'. Please enter a number 1-10. Weight cleared.",
+                duration=4000,
             )
         self.metric_weights = temp_weights
 
@@ -438,11 +526,12 @@ class FilePrepState(rx.State):
             if threshold_str == "":
                 self.pass_threshold = None
             else:
-                self.pass_threshold = float(threshold_str)
+                threshold = float(threshold_str)
+                self.pass_threshold = threshold
         except ValueError:
             self.pass_threshold = None
             yield rx.toast(
-                "Invalid number for Pass Threshold.",
+                "Invalid number for Pass Threshold. Please enter a valid number or leave blank.",
                 duration=3000,
             )
 
@@ -454,27 +543,29 @@ class FilePrepState(rx.State):
     async def confirm_metrics(self):
         from app.states.project_state import ProjectState
 
+        missing_weights = []
+        for metric in self.all_included_metrics:
+            metric_name = metric["name"]
+            if metric_name not in self.metric_weights:
+                missing_weights.append(metric_name)
+            elif (
+                not 1
+                <= self.metric_weights[metric_name]
+                <= 10
+            ):
+                missing_weights.append(metric_name)
         if not self.all_included_metrics:
             yield rx.toast(
                 "Please include at least one metric.",
                 duration=3000,
             )
             return
-        for metric in self.all_included_metrics:
-            metric_name = metric["name"]
-            if metric_name not in self.metric_weights:
-                yield rx.toast(
-                    f"Missing weight for metric: '{metric_name}'. Please enter a value between 1 and 10.",
-                    duration=4000,
-                )
-                return
-            weight = self.metric_weights[metric_name]
-            if not 1 <= weight <= 10:
-                yield rx.toast(
-                    f"Invalid weight for metric: '{metric_name}'. Weight must be 1-10.",
-                    duration=4000,
-                )
-                return
+        if missing_weights:
+            yield rx.toast(
+                f"Missing or invalid weight (1-10) for: {', '.join(missing_weights)}. Please assign weights.",
+                duration=5000,
+            )
+            return
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
             yield rx.toast(
@@ -501,35 +592,176 @@ class FilePrepState(rx.State):
             project_name
         ] = self.pass_definition
         self.metrics_confirmed = True
+        self._reset_downstream_of_metrics()
+        self.excel_columns = list(
+            project_state.project_excel_columns.get(
+                project_name, DEFAULT_EXCEL_COLUMNS
+            )
+        )
+        self.editing_column_index = None
+        self.editing_column_name = ""
         yield rx.toast(
-            "Metrics, Weights & Pass Criteria Confirmed! Configuration complete.",
+            "Metrics, Weights & Pass Criteria Confirmed! Define Excel Columns next.",
+            duration=3000,
+        )
+
+    @rx.event
+    def move_column(
+        self, index: int, direction: Literal["up", "down"]
+    ):
+        """Moves a column up or down in the list."""
+        cols = list(self.excel_columns)
+        if direction == "up" and index > 0:
+            new_index = index - 1
+            cols.insert(new_index, cols.pop(index))
+            self.excel_columns = cols
+            if self.editing_column_index == index:
+                self.editing_column_index = None
+                self.editing_column_name = ""
+            elif self.editing_column_index == new_index:
+                self.editing_column_index = index
+        elif direction == "down" and index < len(cols) - 1:
+            new_index = index + 1
+            cols.insert(new_index, cols.pop(index))
+            self.excel_columns = cols
+            if self.editing_column_index == index:
+                self.editing_column_index = None
+                self.editing_column_name = ""
+            elif self.editing_column_index == new_index:
+                self.editing_column_index = index
+
+    @rx.event
+    def start_editing_column_name(self, index: int):
+        """Starts editing a column name."""
+        if 0 <= index < len(self.excel_columns):
+            if self.excel_columns[index]["editable"]:
+                self.editing_column_index = index
+                self.editing_column_name = (
+                    self.excel_columns[index]["name"]
+                )
+            else:
+                yield rx.toast(
+                    "This column name cannot be edited.",
+                    duration=2000,
+                )
+        else:
+            yield rx.toast(
+                "Invalid column index for editing.",
+                duration=3000,
+            )
+
+    @rx.event
+    def set_editing_column_name(self, name: str):
+        """Updates the temporary name while editing."""
+        self.editing_column_name = name
+
+    @rx.event
+    def save_column_name(self):
+        """Saves the edited column name."""
+        if (
+            self.editing_column_index is not None
+            and 0
+            <= self.editing_column_index
+            < len(self.excel_columns)
+        ):
+            new_name = self.editing_column_name.strip()
+            original_name = self.excel_columns[
+                self.editing_column_index
+            ]["name"]
+            if not new_name:
+                yield rx.toast(
+                    "Column name cannot be empty.",
+                    duration=3000,
+                )
+                return
+            if new_name != original_name:
+                if any(
+                    (
+                        col["name"] == new_name
+                        and i != self.editing_column_index
+                        for i, col in enumerate(
+                            self.excel_columns
+                        )
+                    )
+                ):
+                    yield rx.toast(
+                        f"Column name '{new_name}' already exists.",
+                        duration=3000,
+                    )
+                    return
+            self.excel_columns[self.editing_column_index][
+                "name"
+            ] = new_name
+            self.editing_column_index = None
+            self.editing_column_name = ""
+        else:
+            self.editing_column_index = None
+            self.editing_column_name = ""
+
+    @rx.event
+    def cancel_editing_column_name(self):
+        """Cancels editing a column name."""
+        self.editing_column_index = None
+        self.editing_column_name = ""
+
+    @rx.event
+    async def confirm_columns(self):
+        """Confirms the column configuration."""
+        from app.states.project_state import ProjectState
+
+        if self.editing_column_index is not None:
+            yield rx.toast(
+                "Please finish editing the column name first (Save or Cancel).",
+                duration=3000,
+            )
+            return
+        project_state = await self.get_state(ProjectState)
+        if not project_state.selected_project:
+            yield rx.toast(
+                "Error: No project selected. Cannot confirm Columns.",
+                duration=4000,
+            )
+            return
+        project_name = project_state.selected_project
+        project_state.project_excel_columns[
+            project_name
+        ] = list(self.excel_columns)
+        self.columns_confirmed = True
+        yield rx.toast(
+            "Excel Columns Confirmed! Configuration complete.",
             duration=3000,
         )
 
     def _reset_downstream_of_pairs(self):
         """Resets state from Engines onwards."""
         self.engines_confirmed = False
-        self._reset_downstream_of_engines()
         self.selected_engines = []
         self.new_engine_name = ""
+        self._reset_downstream_of_engines()
 
     def _reset_downstream_of_engines(self):
         """Resets state from ReadMe onwards."""
         self.readme_confirmed = False
-        self._reset_downstream_of_readme()
         self.readme_choice = None
         self.custom_readme_content = self.default_readme
+        self._reset_downstream_of_readme()
 
     def _reset_downstream_of_readme(self):
         """Resets state from Stakeholder onwards."""
         self.stakeholder_confirmed = False
-        self._reset_downstream_of_stakeholder()
         self.stakeholder_comments = ""
+        self._reset_downstream_of_stakeholder()
 
     def _reset_downstream_of_stakeholder(self):
-        """Resets state from Metrics/Pass Criteria onwards."""
+        """Resets state from Metrics onwards."""
         self.metrics_confirmed = False
         self._reset_metric_and_pass_state()
+        self._reset_downstream_of_metrics()
+
+    def _reset_downstream_of_metrics(self):
+        """Resets state from Columns onwards."""
+        self.columns_confirmed = False
+        self._reset_column_state()
 
     def _reset_metric_and_pass_state(self):
         """Resets only the metric and pass criteria state to defaults."""
@@ -545,15 +777,21 @@ class FilePrepState(rx.State):
         self.pass_threshold = None
         self.pass_definition = ""
 
-    async def _load_project_text_and_metrics(
+    def _reset_column_state(self):
+        """Resets column state to default."""
+        self.excel_columns = DEFAULT_EXCEL_COLUMNS
+        self.editing_column_index = None
+        self.editing_column_name = ""
+
+    def _load_project_data_after_engines(
         self, project_state
     ):
-        """Loads ReadMe, Stakeholder, Metric settings, and Pass Criteria from ProjectState."""
+        """
+        Loads ReadMe and Stakeholder data from ProjectState after engines are confirmed.
+        Also calls the next loading step. Synchronous helper.
+        """
         if not project_state.selected_project:
-            self.custom_readme_content = self.default_readme
-            self.readme_choice = None
-            self.stakeholder_comments = ""
-            self._reset_metric_and_pass_state()
+            self._reset_downstream_of_engines()
             return
         project_name = project_state.selected_project
         saved_readme = (
@@ -573,6 +811,18 @@ class FilePrepState(rx.State):
                 project_name, ""
             )
         )
+        self._load_metric_pass_column_data(project_state)
+
+    def _load_metric_pass_column_data(self, project_state):
+        """
+        Loads Metrics, Pass Criteria, and Columns data from ProjectState.
+        Called after stakeholder info is loaded/confirmed. Synchronous helper.
+        """
+        if not project_state.selected_project:
+            self._reset_metric_and_pass_state()
+            self._reset_column_state()
+            return
+        project_name = project_state.selected_project
         saved_metrics_config = (
             project_state.project_included_metrics.get(
                 project_name, None
@@ -594,18 +844,15 @@ class FilePrepState(rx.State):
             )
             loaded_weights = dict(saved_weights)
             current_weights = {}
-            all_included_names = (
+            all_metric_names_to_load = (
                 self.included_evergreen_metrics
                 + [cm["name"] for cm in self.custom_metrics]
             )
-            for name in all_included_names:
-                current_weights[name] = (
-                    loaded_weights.get(name, 5)
-                    if 1
-                    <= loaded_weights.get(name, 5)
-                    <= 10
-                    else 5
-                )
+            for name in all_metric_names_to_load:
+                weight = loaded_weights.get(name, 5)
+                if not 1 <= weight <= 10:
+                    weight = 5
+                current_weights[name] = weight
             self.metric_weights = current_weights
         else:
             self._reset_metric_and_pass_state()
@@ -619,44 +866,77 @@ class FilePrepState(rx.State):
                 project_name, ""
             )
         )
+        saved_columns = (
+            project_state.project_excel_columns.get(
+                project_name, DEFAULT_EXCEL_COLUMNS
+            )
+        )
+        self.excel_columns = [
+            col.copy() for col in saved_columns
+        ]
+        self.editing_column_index = None
+        self.editing_column_name = ""
 
     @rx.event
     def reset_state(self):
-        """Resets the entire FilePrepState."""
+        """Resets the entire FilePrepState to initial values."""
         self.current_source_language = None
         self.current_target_language = None
         self.selected_pairs_for_session = []
         self.pairs_confirmed = False
-        self._reset_downstream_of_pairs()
+        self.available_engines = ["Banana MT", "Banana FM"]
+        self.selected_engines = []
+        self.new_engine_name = ""
+        self.engines_confirmed = False
+        self.readme_choice = None
+        self.custom_readme_content = self.default_readme
+        self.readme_confirmed = False
+        self.stakeholder_comments = ""
+        self.stakeholder_confirmed = False
+        self._reset_metric_and_pass_state()
+        self.metrics_confirmed = False
+        self._reset_column_state()
+        self.columns_confirmed = False
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
+        """Allows editing Language Pairs again and resets downstream state."""
         self.pairs_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_pairs()
 
     @rx.event
     def set_engines_confirmed(self, confirmed: bool):
+        """Allows editing MT Engines again and resets downstream state."""
         self.engines_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_engines()
 
     @rx.event
     def set_readme_confirmed(self, confirmed: bool):
+        """Allows editing Read Me again and resets downstream state."""
         self.readme_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_readme()
 
     @rx.event
     def set_stakeholder_confirmed(self, confirmed: bool):
+        """Allows editing Stakeholder Perspective again and resets downstream state."""
         self.stakeholder_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_stakeholder()
 
     @rx.event
     def set_metrics_confirmed(self, confirmed: bool):
-        """Allows editing Metrics & Pass Criteria again."""
+        """Allows editing Metrics & Weighting again and resets downstream state."""
         self.metrics_confirmed = confirmed
+        if not confirmed:
+            self._reset_downstream_of_metrics()
+
+    @rx.event
+    def set_columns_confirmed(self, confirmed: bool):
+        """Allows editing Columns again."""
+        self.columns_confirmed = confirmed
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
@@ -714,6 +994,10 @@ class FilePrepState(rx.State):
         return False
 
     @rx.var
+    def is_confirm_columns_disabled(self) -> bool:
+        return self.editing_column_index is not None
+
+    @rx.var
     def final_readme_content(self) -> str:
         """Determines the Read Me content to be saved based on the choice."""
         if self.readme_choice == "default":
@@ -748,11 +1032,17 @@ class FilePrepState(rx.State):
 
     @rx.var
     def total_metric_weight(self) -> int:
-        """Calculates the sum of weights for all currently included metrics."""
+        """Calculates the sum of weights for all currently included metrics that have weights."""
         total = 0
-        included_names = [
+        included_names_with_weights = (
+            self.metric_weights.keys()
+        )
+        all_included_metric_names = [
             m["name"] for m in self.all_included_metrics
         ]
-        for name in included_names:
-            total += self.metric_weights.get(name, 0)
+        for name in all_included_metric_names:
+            if name in included_names_with_weights:
+                weight = self.metric_weights.get(name, 0)
+                if 1 <= weight <= 10:
+                    total += weight
         return total

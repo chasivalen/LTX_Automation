@@ -12,6 +12,8 @@ from app.states.file_prep_state import (
     DEFAULT_README_TEXT,
     EVERGREEN_METRICS,
     CustomMetric,
+    ExcelColumn,
+    DEFAULT_EXCEL_COLUMNS,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -58,6 +60,9 @@ class ProjectState(rx.State):
     project_pass_definition: Dict[str, str] = {
         "Default Project": ""
     }
+    project_excel_columns: Dict[str, List[ExcelColumn]] = {
+        "Default Project": list(DEFAULT_EXCEL_COLUMNS)
+    }
 
     def _initialize_project_data(self, project_name: str):
         """Initializes all data structures for a newly created project."""
@@ -92,6 +97,10 @@ class ProjectState(rx.State):
             self.project_pass_threshold[project_name] = None
         if project_name not in self.project_pass_definition:
             self.project_pass_definition[project_name] = ""
+        if project_name not in self.project_excel_columns:
+            self.project_excel_columns[project_name] = list(
+                DEFAULT_EXCEL_COLUMNS
+            )
 
     @rx.event
     async def create_project(self):
@@ -268,4 +277,16 @@ class ProjectState(rx.State):
             )
             if self.selected_project
             else ""
+        )
+
+    @rx.var
+    def current_project_excel_columns(
+        self,
+    ) -> List[ExcelColumn]:
+        return list(
+            self.project_excel_columns.get(
+                self.selected_project, DEFAULT_EXCEL_COLUMNS
+            )
+            if self.selected_project
+            else DEFAULT_EXCEL_COLUMNS
         )
