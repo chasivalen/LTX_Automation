@@ -13,6 +13,9 @@ from app.components.readme_customizer import (
 from app.components.stakeholder_perspective import (
     stakeholder_perspective_component,
 )
+from app.components.metric_definition import (
+    metric_definition_component,
+)
 
 
 def project_type_button(text: ProjectType) -> rx.Component:
@@ -31,7 +34,7 @@ def project_type_button(text: ProjectType) -> rx.Component:
 
 
 def mt_project_view() -> rx.Component:
-    """The view for MT projects, progressing through pairs, engines, Read Me, and Stakeholder comments."""
+    """The view for MT projects, progressing through pairs, engines, Read Me, Stakeholder comments, and Metrics."""
     return rx.match(
         FilePrepState.pairs_confirmed,
         (False, language_pair_selector()),
@@ -58,83 +61,117 @@ def mt_project_view() -> rx.Component:
                                 ),
                                 (
                                     True,
-                                    rx.el.div(
-                                        rx.el.h4(
-                                            "MT Project - Configuration Complete 🎉",
-                                            class_name="text-xl font-medium mb-4 text-green-700",
+                                    rx.match(
+                                        FilePrepState.metrics_confirmed,
+                                        (
+                                            False,
+                                            metric_definition_component(),
                                         ),
-                                        rx.el.p(
-                                            "Language pairs, MT engines, Read Me instructions, and stakeholder comments have been set.",
-                                            class_name="text-gray-600 mb-4",
-                                        ),
-                                        rx.el.details(
-                                            rx.el.summary(
-                                                "View Final Read Me Content",
-                                                class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
-                                            ),
+                                        (
+                                            True,
                                             rx.el.div(
-                                                rx.markdown(
-                                                    FilePrepState.final_readme_content
+                                                rx.el.h4(
+                                                    "MT Project - Configuration Complete 🎉",
+                                                    class_name="text-xl font-medium mb-4 text-green-700",
                                                 ),
-                                                class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2",
-                                            ),
-                                            class_name="mb-4",
-                                        ),
-                                        rx.el.details(
-                                            rx.el.summary(
-                                                "View Stakeholder Comments",
-                                                class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
-                                            ),
-                                            rx.el.div(
-                                                rx.text(
-                                                    FilePrepState.stakeholder_comments,
-                                                    class_name=rx.cond(
-                                                        FilePrepState.stakeholder_comments.length()
-                                                        > 0,
-                                                        "whitespace-pre-wrap",
-                                                        "text-gray-500 italic",
+                                                rx.el.p(
+                                                    "All steps completed: Language pairs, MT engines, Read Me, Stakeholder comments, and Metrics/Weights defined.",
+                                                    class_name="text-gray-600 mb-4",
+                                                ),
+                                                rx.el.details(
+                                                    rx.el.summary(
+                                                        "View Final Metrics & Weights",
+                                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
                                                     ),
+                                                    rx.el.ul(
+                                                        rx.foreach(
+                                                            FilePrepState.all_included_metrics,
+                                                            lambda metric: rx.el.li(
+                                                                f"{metric['name']}: Weight {FilePrepState.metric_weights.get(metric['name'], 'N/A')}",
+                                                                class_name="text-sm p-1",
+                                                            ),
+                                                        ),
+                                                        class_name="list-disc list-inside p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2",
+                                                    ),
+                                                    class_name="mb-4",
                                                 ),
-                                                class_name="text-sm p-3 border border-gray-200 rounded bg-gray-50 max-h-40 overflow-y-auto mt-2",
+                                                rx.el.details(
+                                                    rx.el.summary(
+                                                        "View Final Read Me Content",
+                                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
+                                                    ),
+                                                    rx.el.div(
+                                                        rx.markdown(
+                                                            FilePrepState.final_readme_content
+                                                        ),
+                                                        class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2",
+                                                    ),
+                                                    class_name="mb-4",
+                                                ),
+                                                rx.el.details(
+                                                    rx.el.summary(
+                                                        "View Stakeholder Comments",
+                                                        class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
+                                                    ),
+                                                    rx.el.div(
+                                                        rx.text(
+                                                            FilePrepState.stakeholder_comments,
+                                                            class_name=rx.cond(
+                                                                FilePrepState.stakeholder_comments.length()
+                                                                > 0,
+                                                                "whitespace-pre-wrap",
+                                                                "text-gray-500 italic",
+                                                            ),
+                                                        ),
+                                                        class_name="text-sm p-3 border border-gray-200 rounded bg-gray-50 max-h-40 overflow-y-auto mt-2",
+                                                    ),
+                                                    class_name="mb-6",
+                                                ),
+                                                rx.el.p(
+                                                    "Next Step: Generate Evaluation Template (Not Implemented Yet).",
+                                                    class_name="text-gray-600 italic font-semibold mb-6",
+                                                ),
+                                                rx.el.div(
+                                                    rx.el.button(
+                                                        "Edit Language Pairs",
+                                                        on_click=lambda: FilePrepState.set_pairs_confirmed(
+                                                            False
+                                                        ),
+                                                        class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
+                                                    ),
+                                                    rx.el.button(
+                                                        "Edit MT Engines",
+                                                        on_click=lambda: FilePrepState.set_engines_confirmed(
+                                                            False
+                                                        ),
+                                                        class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
+                                                    ),
+                                                    rx.el.button(
+                                                        "Edit Read Me",
+                                                        on_click=lambda: FilePrepState.set_readme_confirmed(
+                                                            False
+                                                        ),
+                                                        class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
+                                                    ),
+                                                    rx.el.button(
+                                                        "Edit Stakeholder Perspective",
+                                                        on_click=lambda: FilePrepState.set_stakeholder_confirmed(
+                                                            False
+                                                        ),
+                                                        class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
+                                                    ),
+                                                    rx.el.button(
+                                                        "Edit Metrics & Weights",
+                                                        on_click=lambda: FilePrepState.set_metrics_confirmed(
+                                                            False
+                                                        ),
+                                                        class_name="mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
+                                                    ),
+                                                    class_name="flex flex-wrap border-t border-gray-200 pt-4",
+                                                ),
+                                                class_name="p-6 border border-green-200 rounded-lg bg-green-50 shadow-md",
                                             ),
-                                            class_name="mb-6",
                                         ),
-                                        rx.el.p(
-                                            "Next Step: Define Metrics and Weights.",
-                                            class_name="text-gray-600 italic font-semibold mb-6",
-                                        ),
-                                        rx.el.div(
-                                            rx.el.button(
-                                                "Edit Language Pairs",
-                                                on_click=lambda: FilePrepState.set_pairs_confirmed(
-                                                    False
-                                                ),
-                                                class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
-                                            ),
-                                            rx.el.button(
-                                                "Edit MT Engines",
-                                                on_click=lambda: FilePrepState.set_engines_confirmed(
-                                                    False
-                                                ),
-                                                class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
-                                            ),
-                                            rx.el.button(
-                                                "Edit Read Me",
-                                                on_click=lambda: FilePrepState.set_readme_confirmed(
-                                                    False
-                                                ),
-                                                class_name="mr-4 mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
-                                            ),
-                                            rx.el.button(
-                                                "Edit Stakeholder Perspective",
-                                                on_click=lambda: FilePrepState.set_stakeholder_confirmed(
-                                                    False
-                                                ),
-                                                class_name="mb-2 px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
-                                            ),
-                                            class_name="flex flex-wrap border-t border-gray-200 pt-4",
-                                        ),
-                                        class_name="p-6 border border-green-200 rounded-lg bg-green-50 shadow-md",
                                     ),
                                 ),
                             ),

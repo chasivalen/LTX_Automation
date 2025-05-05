@@ -1,14 +1,23 @@
 import reflex as rx
-from typing import Optional
+from typing import Optional, TypedDict
 import logging
-from app.states.file_prep_state import DEFAULT_README_TEXT
+from app.states.file_prep_state import (
+    DEFAULT_README_TEXT,
+    EVERGREEN_METRICS,
+    CustomMetric,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+class MetricsConfig(TypedDict):
+    evergreen: list[str]
+    custom: list[CustomMetric]
+
+
 class ProjectState(rx.State):
-    """Manages project creation, selection, and associated data (like language pairs, engines, ReadMe, and stakeholder comments) for the LTX Bench flow."""
+    """Manages project creation, selection, and associated data for the LTX Bench flow."""
 
     projects: list[str] = ["Default Project"]
     selected_project: str | None = None
@@ -25,15 +34,21 @@ class ProjectState(rx.State):
     project_stakeholder_comments: dict[str, str] = {
         "Default Project": ""
     }
+    project_included_metrics: dict[str, MetricsConfig] = {
+        "Default Project": {
+            "evergreen": list(EVERGREEN_METRICS.keys()),
+            "custom": [],
+        }
+    }
+    project_metric_weights: dict[str, dict[str, int]] = {
+        "Default Project": {
+            metric: 5 for metric in EVERGREEN_METRICS
+        }
+    }
 
     @rx.event
     async def create_project(self):
-        """
-        Creates a new project, selects it, and notifies AppState.
-        Resets FilePrepState for the new project context.
-        Initializes project data (including ReadMe with default and empty comments).
-        Shows a toast message on failure (invalid name or duplicate).
-        """
+        """Creates a new project, selects it, initializes data, and notifies AppState."""
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
 
@@ -55,6 +70,13 @@ class ProjectState(rx.State):
             self.project_stakeholder_comments[
                 project_name
             ] = ""
+            self.project_included_metrics[project_name] = {
+                "evergreen": list(EVERGREEN_METRICS.keys()),
+                "custom": [],
+            }
+            self.project_metric_weights[project_name] = {
+                metric: 5 for metric in EVERGREEN_METRICS
+            }
             self.new_project_name = ""
             logger.info(
                 f"Project '{project_name}' added to state."
@@ -83,10 +105,7 @@ class ProjectState(rx.State):
 
     @rx.event
     async def select_project(self, project_name: str):
-        """
-        Selects an existing project, notifies AppState, and resets FilePrepState.
-        Ensures project data (including ReadMe and comments) exists or initializes it.
-        """
+        """Selects an existing project, ensures data exists, notifies AppState, and resets FilePrepState."""
         from app.states.app_state import AppState
         from app.states.file_prep_state import FilePrepState
 
@@ -121,6 +140,39 @@ class ProjectState(rx.State):
                 self.project_stakeholder_comments[
                     project_name
                 ] = ""
+            if (
+                project_name
+                not in self.project_included_metrics
+            ):
+                self.project_included_metrics[
+                    project_name
+                ] = {
+                    "evergreen": list(
+                        EVERGREEN_METRICS.keys()
+                    ),
+                    "custom": [],
+                }
+            if (
+                project_name
+                not in self.project_metric_weights
+            ):
+                default_weights = {}
+                included_config = (
+                    self.project_included_metrics[
+                        project_name
+                    ]
+                )
+                for eg_metric in included_config.get(
+                    "evergreen", []
+                ):
+                    default_weights[eg_metric] = 5
+                for cust_metric in included_config.get(
+                    "custom", []
+                ):
+                    default_weights[cust_metric["name"]] = 5
+                self.project_metric_weights[
+                    project_name
+                ] = default_weights
             yield AppState.set_project_selected(True)
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project selection."
@@ -156,32 +208,64 @@ class ProjectState(rx.State):
     def current_project_pairs(
         self,
     ) -> list[tuple[str, str]]:
-        if self.selected_project:
-            return self.project_language_pairs.get(
+        return (
+            self.project_language_pairs.get(
                 self.selected_project, []
             )
-        return []
+            if self.selected_project
+            else []
+        )
 
     @rx.var
     def current_project_engines(self) -> list[str]:
-        if self.selected_project:
-            return self.project_mt_engines.get(
+        return (
+            self.project_mt_engines.get(
                 self.selected_project, []
             )
-        return []
+            if self.selected_project
+            else []
+        )
 
     @rx.var
     def current_project_readme(self) -> str:
-        if self.selected_project:
-            return self.project_readme_content.get(
+        return (
+            self.project_readme_content.get(
                 self.selected_project, DEFAULT_README_TEXT
             )
-        return DEFAULT_README_TEXT
+            if self.selected_project
+            else DEFAULT_README_TEXT
+        )
 
     @rx.var
     def current_project_stakeholder_comments(self) -> str:
-        if self.selected_project:
-            return self.project_stakeholder_comments.get(
+        return (
+            self.project_stakeholder_comments.get(
                 self.selected_project, ""
             )
-        return ""
+            if self.selected_project
+            else ""
+        )
+
+    @rx.var
+    def current_project_metrics_config(
+        self,
+    ) -> MetricsConfig | None:
+        return (
+            self.project_included_metrics.get(
+                self.selected_project, None
+            )
+            if self.selected_project
+            else None
+        )
+
+    @rx.var
+    def current_project_metric_weights(
+        self,
+    ) -> dict[str, int] | None:
+        return (
+            self.project_metric_weights.get(
+                self.selected_project, None
+            )
+            if self.selected_project
+            else None
+        )
