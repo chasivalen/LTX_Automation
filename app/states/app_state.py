@@ -20,14 +20,11 @@ class AppState(rx.State):
     selected_view: ViewType = "default"
     file_prep_project_type: ProjectType | None = None
 
-    async def _yield_reset_file_prep_state(self):
-        """Helper to yield the reset action for FilePrepState."""
+    async def _get_reset_file_prep_event(self):
+        """Helper to get the reset event handler reference for FilePrepState."""
         from app.states.file_prep_state import FilePrepState
 
-        file_prep_state = await self.get_state(
-            FilePrepState
-        )
-        yield FilePrepState.reset_state()
+        return FilePrepState.reset_state
 
     @rx.event
     async def set_initial_choice(
@@ -38,10 +35,10 @@ class AppState(rx.State):
         self.project_selected = False
         self.selected_view = "default"
         self.file_prep_project_type = None
-        async for (
-            event
-        ) in self._yield_reset_file_prep_state():
-            yield event
+        reset_event = (
+            await self._get_reset_file_prep_event()
+        )
+        yield reset_event
 
     @rx.event
     async def reset_initial_choice(self):
@@ -50,10 +47,10 @@ class AppState(rx.State):
         self.project_selected = False
         self.selected_view = "default"
         self.file_prep_project_type = None
-        async for (
-            event
-        ) in self._yield_reset_file_prep_state():
-            yield event
+        reset_event = (
+            await self._get_reset_file_prep_event()
+        )
+        yield reset_event
 
     @rx.event
     async def set_project_selected(self, selected: bool):
@@ -65,10 +62,10 @@ class AppState(rx.State):
         if not selected:
             self.selected_view = "default"
             self.file_prep_project_type = None
-            async for (
-                event
-            ) in self._yield_reset_file_prep_state():
-                yield event
+            reset_event = (
+                await self._get_reset_file_prep_event()
+            )
+            yield reset_event
 
     @rx.event
     async def set_selected_view(self, view: ViewType):
@@ -87,10 +84,10 @@ class AppState(rx.State):
             )
         ):
             self.file_prep_project_type = None
-            async for (
-                event
-            ) in self._yield_reset_file_prep_state():
-                yield event
+            reset_event = (
+                await self._get_reset_file_prep_event()
+            )
+            yield reset_event
 
     @rx.event
     async def set_file_prep_project_type(
@@ -102,7 +99,7 @@ class AppState(rx.State):
         """
         if self.file_prep_project_type != project_type:
             self.file_prep_project_type = project_type
-            async for (
-                event
-            ) in self._yield_reset_file_prep_state():
-                yield event
+            reset_event = (
+                await self._get_reset_file_prep_event()
+            )
+            yield reset_event
