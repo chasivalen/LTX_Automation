@@ -30,12 +30,12 @@ class FilePrepState(rx.State):
     pairs_confirmed: bool = False
 
     @rx.event
-    def set_current_source_language(self, lang: str):
+    def set_current_source_language(self, lang: Language):
         """Sets the source language for the next pair."""
         self.current_source_language = lang
 
     @rx.event
-    def set_current_target_language(self, lang: str):
+    def set_current_target_language(self, lang: Language):
         """Sets the target language for the next pair."""
         self.current_target_language = lang
 
@@ -132,6 +132,11 @@ class FilePrepState(rx.State):
         self.current_target_language = None
         self.selected_pairs_for_session = []
         self.pairs_confirmed = False
+
+    @rx.event
+    def set_pairs_confirmed(self, confirmed: bool):
+        """Allows editing pairs again by setting confirmed to False."""
+        self.pairs_confirmed = confirmed
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
