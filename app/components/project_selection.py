@@ -5,9 +5,16 @@ from app.states.project_state import ProjectState
 def project_selection_component() -> rx.Component:
     """Component for creating or selecting a project for LTX Bench."""
     return rx.el.div(
-        rx.el.h3(
-            "LTX Bench: Create or Select Project",
-            class_name="text-2xl font-semibold mb-6 text-gray-800 text-center",
+        rx.el.div(
+            rx.el.h2(
+                "LTX Bench",
+                class_name="text-3xl font-bold text-gray-900 text-center",
+            ),
+            rx.el.p(
+                "Create or Select Project",
+                class_name="text-lg text-gray-600 text-center mt-1 mb-6",
+            ),
+            class_name="mb-6",
         ),
         rx.el.div(
             rx.el.label(
