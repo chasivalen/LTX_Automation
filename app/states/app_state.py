@@ -57,15 +57,23 @@ class AppState(rx.State):
         """
         Sets the project selected status for the LTX Bench workflow.
         Resets LTX Bench views and File Prep state if deselected.
+        Also resets the project choice dropdown in ProjectState if deselected.
         """
         self.project_selected = selected
         if not selected:
             self.selected_view = "default"
             self.file_prep_project_type = None
-            reset_event = (
-                await self._get_reset_file_prep_event()
+            from app.states.file_prep_state import (
+                FilePrepState,
             )
-            yield reset_event
+
+            yield FilePrepState.reset_state
+            from app.states.project_state import (
+                ProjectState,
+            )
+
+            project_s = await self.get_state(ProjectState)
+            project_s.project_choice_in_dropdown = None
 
     @rx.event
     async def set_selected_view(self, view: ViewType):
