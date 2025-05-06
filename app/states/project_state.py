@@ -31,7 +31,7 @@ def get_default_excel_columns() -> list[ExcelColumn]:
 class ProjectState(rx.State):
     """Manages project creation, selection, and associated data for the LTX Bench flow."""
 
-    projects: list[str] = ["Default Project"]
+    projects: list[str] = []
     selected_project: str | None = None
     new_project_name: str = ""
     project_choice_in_dropdown: str | None = None
