@@ -1,12 +1,7 @@
 import reflex as rx
-from typing import (
-    Optional,
-    Literal,
-    TypedDict,
-    List,
-    Dict,
-    Tuple,
-)
+from typing import Optional, Literal, TypedDict
+import uuid
+import re
 
 Language = Literal[
     "English",
@@ -18,6 +13,13 @@ Language = Literal[
     "Chinese",
 ]
 ReadmeChoice = Literal["default", "customize", "new"]
+ColumnGroup = Literal[
+    "Input",
+    "Pre-Evaluation",
+    "Metric",
+    "Calculated Score",
+    "Freeform",
+]
 DEFAULT_README_TEXT = "1. Please read through READ ME tab before you kick off the Evaluation Task:\na. Check out the Metrics and their corresponding Definitions & Notes to understand what aspects of the language performance you are evaluating against;\nb. Check out the Scoring Definition section to understand how you should be scoring each segment from a range of 1 to 5;\nc. The Weights/Percentage section is for your reference as to how much each metric is valued for this specific project.\n\n2. Once you are done reading through the READ ME tab, please move on to the Part 1 tabs to start the actual evaluation task. \n\n3. Pre-Eval: Before you start evaluating a segment, please take a quick look at both the SOURCE and TARGET columns, and:\na.If you find the source quality of a segment in SOURCE Column too terrible to understand, please choose Incomprehensible Input from the dropdown list of Pre-Eval column and skip the evaluation of this segment;\nb. If you find that the content in TARGET Column is not the translation of source, please choose Irrelevant Target from the dropdown list and score 0.9 under every metric for this segment.\n\n4. If you don't see a big issue with either the SOURCE or TARGET, please start evaluating the segment from TARGET column\na. First give an overall score (1 to 5) for the whole segment under the \"Overall\" Column;\nb. Then evaluate per metric with a scoring range from 1 to 5;\nc. Metrics are divided into “Evergreen” and “Customized”, so please make sure to score all of them;\nd. Please score each metric based on the overall performance in this aspect according to the scoring definition; \ne. If a translation issue has an impact on more than one metric, please penalize it accordingly in multiple metrics as needed.\n\n5. Overall Rating will be automatically calculated with pre-filled formulas in both non-weighted and weighted forms, so please don’t touch any of the RATING Columns.\n\n6. If you have any comments for the segment, you could leave them under the Additional Notes Column\n\n7. After completing the rating work for Part 1, please review the entire section again to check for any cells with a yellow background. If a cell has a yellow background, it's possible that you have either forgotten to add a rating or entered an invalid rating value.\n\n8. With the evaluation done, all relevant data will be automatically pulled to Part 2 - Data Analysis tab for data analysis in both numbers and visuals formats, and comparison will be available if evaluation is done on multiple tools.\n\n9. Based on data displayed in Part 2 - Data Analysis tab, please provide your take on the performance of each tool included in the Data Analysis Summary at the top of the tab, and make sure to answer all questions listed to be thorough.\n\n10. In Part 3 - Criteria Based Assess tab, please provide comments to questions regarding criteria specific to the project and your overall summary for you locale, so that the Project Lead can incorporate your opinions into the final Report.\n\n11. Once you are done with the whole process, please rename your file by adding the Completion Date and Your name.\n"
 EVERGREEN_METRICS: dict[str, str] = {
     "Accuracy": "Source information is misinterpreted for the target translation, Numbers mismatch, Acronym mismatch.",
@@ -35,90 +37,139 @@ class CustomMetric(TypedDict):
 class ExcelColumn(TypedDict, total=False):
     name: str
     id: str
+    group: ColumnGroup
+    description: Optional[str]
+    editable_name: bool
+    movable_within_group: bool
     required: bool
-    editable: bool
     metric_source: bool
-    original_index: Optional[int]
+    is_first_movable_in_group: bool
+    is_last_movable_in_group: bool
+    formula_description: Optional[str]
+    formula_excel_style: Optional[str]
 
 
-DEFAULT_EXCEL_COLUMNS_DATA: List[Dict] = [
+class MetricInfo(TypedDict):
+    name: str
+    definition: str
+
+
+DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
     {
         "name": "File Name",
         "id": "file_name",
+        "group": "Input",
+        "description": "Source-driven input from uploaded files.",
+        "editable_name": False,
+        "movable_within_group": False,
         "required": True,
-        "editable": False,
         "metric_source": False,
     },
     {
         "name": "Source",
         "id": "source",
+        "group": "Input",
+        "description": "Source text segment.",
+        "editable_name": False,
+        "movable_within_group": False,
         "required": True,
-        "editable": False,
         "metric_source": False,
     },
     {
         "name": "Target",
         "id": "target",
+        "group": "Input",
+        "description": "Translated text segment.",
+        "editable_name": False,
+        "movable_within_group": False,
         "required": True,
-        "editable": False,
         "metric_source": False,
     },
     {
         "name": "Word Count",
         "id": "word_count",
+        "group": "Pre-Evaluation",
+        "description": "Source word count (formula driven).",
+        "editable_name": True,
+        "movable_within_group": True,
         "required": False,
-        "editable": True,
         "metric_source": False,
+        "formula_description": "Calculates the number of words in the 'Source' column for the current row.",
+        "formula_excel_style": '=IF(ISBLANK(SourceCell),0,LEN(TRIM(SourceCell))-LEN(SUBSTITUTE(TRIM(SourceCell)," ",""))+1)',
     },
     {
         "name": "Pre-Eval",
         "id": "pre_eval",
+        "group": "Pre-Evaluation",
+        "description": "Contextual filter (drop-down selection).",
+        "editable_name": True,
+        "movable_within_group": True,
         "required": True,
-        "editable": True,
         "metric_source": False,
     },
     {
         "name": "Applicable Word Count",
         "id": "applicable_word_count",
+        "group": "Pre-Evaluation",
+        "description": "Word count after pre-evaluation (formula driven).",
+        "editable_name": True,
+        "movable_within_group": True,
         "required": False,
-        "editable": True,
         "metric_source": False,
+        "formula_description": "If 'Pre-Eval' is 'Incomprehensible Input' or 'Irrelevant Target', this is 0. Otherwise, it's the 'Word Count'.",
+        "formula_excel_style": '=IF(OR(PreEvalCell="Incomprehensible Input", PreEvalCell="Irrelevant Target"),0,WordCountCell)',
     },
     {
         "name": "Overall",
         "id": "overall",
+        "group": "Pre-Evaluation",
+        "description": "Overall segment score (user input).",
+        "editable_name": True,
+        "movable_within_group": True,
         "required": True,
-        "editable": True,
         "metric_source": False,
     },
     {
         "name": "Rating (Not Weighted)",
         "id": "rating_not_weighted",
+        "group": "Calculated Score",
+        "description": "Calculated score (formula driven). Averages all metric scores.",
+        "editable_name": False,
+        "movable_within_group": False,
         "required": True,
-        "editable": False,
         "metric_source": False,
+        "formula_description": "Calculates the simple average of all included metric scores for the current row.",
+        "formula_excel_style": "=AVERAGE(MetricRange)",
     },
     {
         "name": "Rating (Weighted)",
         "id": "rating_weighted",
+        "group": "Calculated Score",
+        "description": "Weighted calculated score (formula driven). Uses defined metric weights.",
+        "editable_name": False,
+        "movable_within_group": False,
         "required": True,
-        "editable": False,
         "metric_source": False,
-    },
-    {
-        "name": "Weighted Rating Length",
-        "id": "weighted_rating_length",
-        "required": False,
-        "editable": True,
-        "metric_source": False,
+        "formula_description": "Calculates the weighted average of metric scores based on their assigned weights.",
+        "formula_excel_style": "=SUMPRODUCT(MetricScoreRange, MetricWeightRange) / SUM(MetricWeightRange)",
     },
     {
         "name": "Additional Notes",
         "id": "additional_notes",
+        "group": "Freeform",
+        "description": "Evaluator's freeform comments.",
+        "editable_name": True,
+        "movable_within_group": False,
         "required": False,
-        "editable": True,
         "metric_source": False,
     },
+]
+COLUMN_GROUPS_ORDER: list[ColumnGroup] = [
+    "Input",
+    "Pre-Evaluation",
+    "Metric",
+    "Calculated Score",
+    "Freeform",
 ]
 
 
@@ -167,19 +218,16 @@ class FilePrepState(rx.State):
     pass_threshold: float | None = None
     pass_definition: str = ""
     excel_columns: list[ExcelColumn] = [
-        ExcelColumn(
-            name=col["name"],
-            id=col["id"],
-            required=col["required"],
-            editable=col["editable"],
-            metric_source=col["metric_source"],
-        )
-        for col in DEFAULT_EXCEL_COLUMNS_DATA
-        if not col.get("metric_source", False)
+        ExcelColumn(**col_data)
+        for col_data in DEFAULT_EXCEL_COLUMNS_DATA
     ]
     columns_confirmed: bool = False
     editing_column_id: Optional[str] = None
     editing_column_name: str = ""
+    show_formula_modal: bool = False
+    selected_column_for_formula: Optional[ExcelColumn] = (
+        None
+    )
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -297,6 +345,8 @@ class FilePrepState(rx.State):
         name = self.new_engine_name.strip()
         if name and name not in self.selected_engines:
             self.selected_engines.append(name)
+            if name not in self.available_engines:
+                self.available_engines.append(name)
             self.new_engine_name = ""
         elif not name:
             yield rx.toast(
@@ -365,17 +415,20 @@ class FilePrepState(rx.State):
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
-            self.custom_readme_content = (
-                self.default_readme
-                if saved_readme == self.default_readme
-                else saved_readme
-            )
+            if (
+                self.custom_readme_content
+                == self.default_readme
+                or not self.custom_readme_content.strip()
+            ):
+                self.custom_readme_content = (
+                    self.default_readme
+                )
         elif choice == "new":
-            self.custom_readme_content = (
-                ""
-                if saved_readme == self.default_readme
-                else saved_readme
-            )
+            if (
+                self.custom_readme_content
+                == self.default_readme
+            ):
+                self.custom_readme_content = ""
 
     @rx.event
     def set_custom_readme_content(self, content: str):
@@ -589,6 +642,14 @@ class FilePrepState(rx.State):
                 duration=5000,
             )
             return
+        threshold_set = self.pass_threshold is not None
+        definition_set = self.pass_definition.strip() != ""
+        if threshold_set != definition_set:
+            yield rx.toast(
+                "Both Pass Threshold and Pass Definition must be set, or neither.",
+                duration=4000,
+            )
+            return
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
             yield rx.toast(
@@ -616,35 +677,20 @@ class FilePrepState(rx.State):
         ] = self.pass_definition
         self.metrics_confirmed = True
         self._reset_downstream_of_metrics()
-        saved_cols = (
+        saved_cols_raw = (
             project_state.project_excel_columns.get(
-                project_name,
-                [
-                    ExcelColumn(
-                        name=col["name"],
-                        id=col["id"],
-                        required=col["required"],
-                        editable=col["editable"],
-                        metric_source=col["metric_source"],
-                    )
-                    for col in DEFAULT_EXCEL_COLUMNS_DATA
-                    if not col.get("metric_source", False)
-                ],
+                project_name
             )
         )
-        self.excel_columns = [
-            ExcelColumn(
-                name=col["name"],
-                id=col["id"],
-                required=col["required"],
-                editable=col["editable"],
-                metric_source=col.get(
-                    "metric_source", False
-                ),
-            )
-            for col in saved_cols
-            if not col.get("metric_source", False)
-        ]
+        if saved_cols_raw:
+            self.excel_columns = [
+                ExcelColumn(**col) for col in saved_cols_raw
+            ]
+        else:
+            self.excel_columns = [
+                ExcelColumn(**col)
+                for col in DEFAULT_EXCEL_COLUMNS_DATA
+            ]
         self.editing_column_id = None
         self.editing_column_name = ""
         yield rx.toast(
@@ -658,42 +704,62 @@ class FilePrepState(rx.State):
         column_id: str,
         direction: Literal["left", "right"],
     ):
-        """Moves a column left or right in the user-manageable list."""
-        try:
-            index = next(
-                (
-                    i
-                    for i, col in enumerate(
-                        self.excel_columns
-                    )
-                    if col["id"] == column_id
-                )
-            )
-        except StopIteration:
+        cols = list(self.excel_columns)
+        idx_target = -1
+        for i, col_data in enumerate(cols):
+            if col_data["id"] == column_id:
+                idx_target = i
+                break
+        if idx_target == -1:
             yield rx.toast(
-                f"Error: Column with ID '{column_id}' not found for moving.",
-                duration=3000,
+                "Column not found.", duration=3000
             )
             return
-        cols = list(self.excel_columns)
-        if direction == "left" and index > 0:
-            new_index = index - 1
-            cols.insert(new_index, cols.pop(index))
+        target_column_data = cols[idx_target]
+        if not target_column_data.get(
+            "movable_within_group"
+        ):
+            yield rx.toast(
+                "This column is not movable.", duration=3000
+            )
+            return
+        target_group = target_column_data["group"]
+        idx_swap = -1
+        if direction == "left":
+            for i in range(idx_target - 1, -1, -1):
+                if cols[i][
+                    "group"
+                ] == target_group and cols[i].get(
+                    "movable_within_group"
+                ):
+                    idx_swap = i
+                    break
+        elif direction == "right":
+            for i in range(idx_target + 1, len(cols)):
+                if cols[i][
+                    "group"
+                ] == target_group and cols[i].get(
+                    "movable_within_group"
+                ):
+                    idx_swap = i
+                    break
+        if idx_swap != -1:
+            cols[idx_target], cols[idx_swap] = (
+                cols[idx_swap],
+                cols[idx_target],
+            )
             self.excel_columns = cols
             if self.editing_column_id == column_id:
                 self.editing_column_id = None
                 self.editing_column_name = ""
-        elif direction == "right" and index < len(cols) - 1:
-            new_index = index + 1
-            cols.insert(new_index, cols.pop(index))
-            self.excel_columns = cols
-            if self.editing_column_id == column_id:
-                self.editing_column_id = None
-                self.editing_column_name = ""
+        else:
+            yield rx.toast(
+                "Cannot move column further in this direction.",
+                duration=2000,
+            )
 
     @rx.event
     def start_editing_column_name(self, column_id: str):
-        """Starts editing a column name using its ID."""
         try:
             column_to_edit = next(
                 (
@@ -702,7 +768,7 @@ class FilePrepState(rx.State):
                     if col["id"] == column_id
                 )
             )
-            if column_to_edit["editable"]:
+            if column_to_edit.get("editable_name"):
                 self.editing_column_id = column_id
                 self.editing_column_name = column_to_edit[
                     "name"
@@ -720,25 +786,18 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_editing_column_name(self, name: str):
-        """Updates the temporary name while editing."""
         self.editing_column_name = name
 
     @rx.event
     def save_column_name(self):
-        """Saves the edited column name using the stored ID."""
         if self.editing_column_id is None:
             return
-        try:
-            index_to_edit = next(
-                (
-                    i
-                    for i, col in enumerate(
-                        self.excel_columns
-                    )
-                    if col["id"] == self.editing_column_id
-                )
-            )
-        except StopIteration:
+        idx_to_edit = -1
+        for i, col in enumerate(self.excel_columns):
+            if col["id"] == self.editing_column_id:
+                idx_to_edit = i
+                break
+        if idx_to_edit == -1:
             yield rx.toast(
                 f"Error saving: Column ID '{self.editing_column_id}' not found.",
                 duration=3000,
@@ -747,7 +806,7 @@ class FilePrepState(rx.State):
             self.editing_column_name = ""
             return
         new_name = self.editing_column_name.strip()
-        original_name = self.excel_columns[index_to_edit][
+        original_name = self.excel_columns[idx_to_edit][
             "name"
         ]
         if not new_name:
@@ -762,30 +821,40 @@ class FilePrepState(rx.State):
                     col["name"] == new_name
                     and col["id"] != self.editing_column_id
                     for col in self.excel_columns
+                    if not col.get("metric_source")
                 )
             ):
                 yield rx.toast(
-                    f"Column name '{new_name}' already exists.",
+                    f"Column name '{new_name}' already exists among base columns.",
+                    duration=3000,
+                )
+                return
+            if any(
+                (
+                    metric_info["name"] == new_name
+                    for metric_info in self.all_included_metrics
+                )
+            ):
+                yield rx.toast(
+                    f"Column name '{new_name}' conflicts with an active metric name.",
                     duration=3000,
                 )
                 return
         temp_cols = [
             col.copy() for col in self.excel_columns
         ]
-        temp_cols[index_to_edit]["name"] = new_name
+        temp_cols[idx_to_edit]["name"] = new_name
         self.excel_columns = temp_cols
         self.editing_column_id = None
         self.editing_column_name = ""
 
     @rx.event
     def cancel_editing_column_name(self):
-        """Cancels editing a column name."""
         self.editing_column_id = None
         self.editing_column_name = ""
 
     @rx.event
     async def confirm_columns(self):
-        """Confirms the user-manageable column configuration."""
         from app.states.project_state import ProjectState
 
         if self.editing_column_id is not None:
@@ -802,58 +871,49 @@ class FilePrepState(rx.State):
             )
             return
         project_name = project_state.selected_project
-        columns_to_save = [
-            ExcelColumn(
-                name=col["name"],
-                id=col["id"],
-                required=col["required"],
-                editable=col["editable"],
-                metric_source=col["metric_source"],
-            )
+        base_columns_to_save = [
+            ExcelColumn(**col)
             for col in self.excel_columns
+            if not col.get("metric_source")
         ]
         project_state.project_excel_columns[
             project_name
-        ] = columns_to_save
+        ] = base_columns_to_save
         self.columns_confirmed = True
+        self.show_formula_modal = False
+        self.selected_column_for_formula = None
         yield rx.toast(
             "Excel Columns Confirmed! Configuration complete.",
             duration=3000,
         )
 
     def _reset_downstream_of_pairs(self):
-        """Resets state from Engines onwards."""
         self.engines_confirmed = False
         self.selected_engines = []
         self.new_engine_name = ""
         self._reset_downstream_of_engines()
 
     def _reset_downstream_of_engines(self):
-        """Resets state from ReadMe onwards."""
         self.readme_confirmed = False
         self.readme_choice = None
         self.custom_readme_content = self.default_readme
         self._reset_downstream_of_readme()
 
     def _reset_downstream_of_readme(self):
-        """Resets state from Stakeholder onwards."""
         self.stakeholder_confirmed = False
         self.stakeholder_comments = ""
         self._reset_downstream_of_stakeholder()
 
     def _reset_downstream_of_stakeholder(self):
-        """Resets state from Metrics onwards."""
         self.metrics_confirmed = False
         self._reset_metric_and_pass_state()
         self._reset_downstream_of_metrics()
 
     def _reset_downstream_of_metrics(self):
-        """Resets state from Columns onwards."""
         self.columns_confirmed = False
         self._reset_column_state()
 
     def _reset_metric_and_pass_state(self):
-        """Resets only the metric and pass criteria state to defaults."""
         self.included_evergreen_metrics = list(
             EVERGREEN_METRICS.keys()
         )
@@ -867,28 +927,18 @@ class FilePrepState(rx.State):
         self.pass_definition = ""
 
     def _reset_column_state(self):
-        """Resets user-manageable column state to default."""
         self.excel_columns = [
-            ExcelColumn(
-                name=col["name"],
-                id=col["id"],
-                required=col["required"],
-                editable=col["editable"],
-                metric_source=col["metric_source"],
-            )
-            for col in DEFAULT_EXCEL_COLUMNS_DATA
-            if not col.get("metric_source", False)
+            ExcelColumn(**col_data)
+            for col_data in DEFAULT_EXCEL_COLUMNS_DATA
         ]
         self.editing_column_id = None
         self.editing_column_name = ""
+        self.show_formula_modal = False
+        self.selected_column_for_formula = None
 
     def _load_project_data_after_engines(
         self, project_state
     ):
-        """
-        Loads ReadMe and Stakeholder data from ProjectState after engines are confirmed.
-        Also calls the next loading step. Synchronous helper.
-        """
         if not project_state.selected_project:
             self._reset_downstream_of_engines()
             return
@@ -903,10 +953,7 @@ class FilePrepState(rx.State):
             self.readme_choice = "default"
         elif not saved_readme.strip():
             self.readme_choice = "new"
-            self.custom_readme_content = ""
         else:
-            import re
-
             default_cleaned = re.sub(
                 "\\s+", " ", self.default_readme
             ).strip()
@@ -925,10 +972,6 @@ class FilePrepState(rx.State):
         self._load_metric_pass_column_data(project_state)
 
     def _load_metric_pass_column_data(self, project_state):
-        """
-        Loads Metrics, Pass Criteria, and Columns data from ProjectState.
-        Called after stakeholder info is loaded/confirmed. Synchronous helper.
-        """
         if not project_state.selected_project:
             self._reset_metric_and_pass_state()
             self._reset_column_state()
@@ -944,13 +987,17 @@ class FilePrepState(rx.State):
                 project_name, None
             )
         )
-        if saved_metrics_config and saved_weights:
+        if (
+            saved_metrics_config
+            and saved_weights is not None
+        ):
             self.included_evergreen_metrics = list(
                 saved_metrics_config.get(
-                    "evergreen", EVERGREEN_METRICS.keys()
+                    "evergreen",
+                    list(EVERGREEN_METRICS.keys()),
                 )
             )
-            saved_custom = saved_metrics_config.get(
+            saved_custom_raw = saved_metrics_config.get(
                 "custom", []
             )
             self.custom_metrics = [
@@ -958,10 +1005,10 @@ class FilePrepState(rx.State):
                     name=cm["name"],
                     definition=cm["definition"],
                 )
-                for cm in saved_custom
+                for cm in saved_custom_raw
             ]
             loaded_weights = dict(saved_weights)
-            current_weights = {}
+            current_weights: dict[str, int] = {}
             all_metric_names_to_load = (
                 self.included_evergreen_metrics
                 + [cm["name"] for cm in self.custom_metrics]
@@ -988,41 +1035,26 @@ class FilePrepState(rx.State):
                 project_name, ""
             )
         )
-        saved_columns_raw = (
+        saved_base_columns_raw = (
             project_state.project_excel_columns.get(
-                project_name,
-                [
-                    ExcelColumn(
-                        name=col["name"],
-                        id=col["id"],
-                        required=col["required"],
-                        editable=col["editable"],
-                        metric_source=col["metric_source"],
-                    )
-                    for col in DEFAULT_EXCEL_COLUMNS_DATA
-                    if not col.get("metric_source", False)
-                ],
+                project_name
             )
         )
-        self.excel_columns = [
-            ExcelColumn(
-                name=col["name"],
-                id=col["id"],
-                required=col["required"],
-                editable=col["editable"],
-                metric_source=col.get(
-                    "metric_source", False
-                ),
-            )
-            for col in saved_columns_raw
-            if not col.get("metric_source", False)
-        ]
+        if saved_base_columns_raw is not None:
+            self.excel_columns = [
+                ExcelColumn(**col_data)
+                for col_data in saved_base_columns_raw
+            ]
+        else:
+            self.excel_columns = [
+                ExcelColumn(**col_data)
+                for col_data in DEFAULT_EXCEL_COLUMNS_DATA
+            ]
         self.editing_column_id = None
         self.editing_column_name = ""
 
     @rx.event
     def reset_state(self):
-        """Resets the entire FilePrepState to initial values."""
         self.current_source_language = None
         self.current_target_language = None
         self.selected_pairs_for_session = []
@@ -1043,43 +1075,65 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
-        """Allows editing Language Pairs again and resets downstream state."""
         self.pairs_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_pairs()
 
     @rx.event
     def set_engines_confirmed(self, confirmed: bool):
-        """Allows editing MT Engines again and resets downstream state."""
         self.engines_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_engines()
 
     @rx.event
     def set_readme_confirmed(self, confirmed: bool):
-        """Allows editing Read Me again and resets downstream state."""
         self.readme_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_readme()
 
     @rx.event
     def set_stakeholder_confirmed(self, confirmed: bool):
-        """Allows editing Stakeholder Perspective again and resets downstream state."""
         self.stakeholder_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_stakeholder()
 
     @rx.event
     def set_metrics_confirmed(self, confirmed: bool):
-        """Allows editing Metrics & Weighting again and resets downstream state."""
         self.metrics_confirmed = confirmed
         if not confirmed:
             self._reset_downstream_of_metrics()
 
     @rx.event
     def set_columns_confirmed(self, confirmed: bool):
-        """Allows editing Columns again."""
         self.columns_confirmed = confirmed
+        if confirmed:
+            self.show_formula_modal = False
+            self.selected_column_for_formula = None
+
+    @rx.event
+    def show_formula_info(self, column_id: str):
+        all_display_cols = self.display_excel_columns
+        found_column: Optional[ExcelColumn] = None
+        for col in all_display_cols:
+            if col["id"] == column_id:
+                found_column = col
+                break
+        if found_column and (
+            found_column.get("formula_description")
+            or found_column.get("formula_excel_style")
+        ):
+            self.selected_column_for_formula = found_column
+            self.show_formula_modal = True
+        else:
+            yield rx.toast(
+                "No formula information available for this column.",
+                duration=3000,
+            )
+
+    @rx.event
+    def hide_formula_info(self):
+        self.show_formula_modal = False
+        self.selected_column_for_formula = None
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
@@ -1132,19 +1186,14 @@ class FilePrepState(rx.State):
             if metric_name not in self.metric_weights:
                 return True
             weight = self.metric_weights[metric_name]
-            if (
-                not isinstance(weight, int)
-                or not 1 <= weight <= 10
+            if not (
+                isinstance(weight, int)
+                and 1 <= weight <= 10
             ):
                 return True
-        if self.pass_threshold is not None and (
-            not self.pass_definition.strip()
-        ):
-            return True
-        if (
-            self.pass_definition.strip()
-            and self.pass_threshold is None
-        ):
+        threshold_set = self.pass_threshold is not None
+        definition_set = self.pass_definition.strip() != ""
+        if threshold_set != definition_set:
             return True
         return False
 
@@ -1154,44 +1203,35 @@ class FilePrepState(rx.State):
 
     @rx.var
     def final_readme_content(self) -> str:
-        """Determines the Read Me content to be saved based on the choice."""
         if self.readme_choice == "default":
             return self.default_readme
         elif self.readme_choice in ["customize", "new"]:
-            if self.readme_choice == "new" and (
-                not self.custom_readme_content.strip()
-            ):
-                return ""
             return self.custom_readme_content
         return self.default_readme
 
     @rx.var
-    def all_included_metrics(self) -> list[dict[str, str]]:
-        """Returns a list of all included metrics (evergreen + custom) with their definitions."""
-        metrics = []
+    def all_included_metrics(self) -> list[MetricInfo]:
+        metrics: list[MetricInfo] = []
         for name in self.included_evergreen_metrics:
             metrics.append(
-                {
-                    "name": name,
-                    "definition": self.evergreen_metrics_definitions.get(
+                MetricInfo(
+                    name=name,
+                    definition=self.evergreen_metrics_definitions.get(
                         name, "Definition not found."
                     ),
-                }
+                )
             )
         for custom_metric in self.custom_metrics:
             metrics.append(
-                {
-                    "name": custom_metric["name"],
-                    "definition": custom_metric[
-                        "definition"
-                    ],
-                }
+                MetricInfo(
+                    name=custom_metric["name"],
+                    definition=custom_metric["definition"],
+                )
             )
         return metrics
 
     @rx.var
     def total_metric_weight(self) -> int:
-        """Calculates the sum of weights for all currently included metrics that have valid weights."""
         total = 0
         all_included_metric_names = [
             m["name"] for m in self.all_included_metrics
@@ -1206,81 +1246,134 @@ class FilePrepState(rx.State):
         return total
 
     @rx.var
-    def display_excel_columns(self) -> list[ExcelColumn]:
-        """Combines user-managed columns with dynamically added metric columns for display."""
-        combined_cols: List[ExcelColumn] = []
-        for i, col_data in enumerate(self.excel_columns):
-            new_col: ExcelColumn = {
-                "name": col_data.get("name", ""),
-                "id": col_data.get("id", ""),
-                "required": col_data.get("required", False),
-                "editable": col_data.get("editable", False),
-                "metric_source": col_data.get(
-                    "metric_source", False
-                ),
-                "original_index": i,
-            }
-            combined_cols.append(new_col)
-        metric_columns_to_add: List[ExcelColumn] = []
+    def final_excel_columns_for_display(
+        self,
+    ) -> list[tuple[ColumnGroup, list[ExcelColumn]]]:
+        grouped_display_columns: dict[
+            ColumnGroup, list[ExcelColumn]
+        ] = {group: [] for group in COLUMN_GROUPS_ORDER}
+        for col_data_orig in self.excel_columns:
+            if col_data_orig.get("metric_source"):
+                continue
+            col_data = col_data_orig.copy()
+            group = col_data.get("group")
+            if group and group in grouped_display_columns:
+                full_col_data: ExcelColumn = {
+                    "name": col_data.get(
+                        "name", "Unknown Column"
+                    ),
+                    "id": col_data.get(
+                        "id",
+                        f"unknown_id_{uuid.uuid4().hex[:6]}",
+                    ),
+                    "group": group,
+                    "description": col_data.get(
+                        "description"
+                    ),
+                    "editable_name": col_data.get(
+                        "editable_name", False
+                    ),
+                    "movable_within_group": col_data.get(
+                        "movable_within_group", False
+                    ),
+                    "required": col_data.get(
+                        "required", False
+                    ),
+                    "metric_source": False,
+                    "formula_description": col_data.get(
+                        "formula_description"
+                    ),
+                    "formula_excel_style": col_data.get(
+                        "formula_excel_style"
+                    ),
+                    "is_first_movable_in_group": False,
+                    "is_last_movable_in_group": False,
+                }
+                grouped_display_columns[group].append(
+                    full_col_data
+                )
+        metric_display_cols: list[ExcelColumn] = []
         for metric_info in self.all_included_metrics:
             metric_name = metric_info["name"]
-            metric_columns_to_add.append(
+            metric_col_id = f"metric_{metric_name.lower().replace(' ', '_').replace('/', '_')}"
+            metric_display_cols.append(
                 ExcelColumn(
                     name=metric_name,
-                    id=f"metric_{metric_name.lower().replace(' ', '_')}",
+                    id=metric_col_id,
+                    group="Metric",
+                    description=metric_info["definition"],
+                    editable_name=False,
+                    movable_within_group=False,
                     required=True,
-                    editable=False,
                     metric_source=True,
-                    original_index=None,
+                    is_first_movable_in_group=False,
+                    is_last_movable_in_group=False,
                 )
             )
-        insert_after_id = "overall"
-        insert_index = -1
-        for i, col in enumerate(combined_cols):
-            if col["id"] == insert_after_id:
-                insert_index = i + 1
-                break
-        if insert_index != -1:
-            combined_cols[insert_index:insert_index] = (
-                metric_columns_to_add
+        if "Metric" not in grouped_display_columns:
+            grouped_display_columns["Metric"] = []
+        grouped_display_columns["Metric"].extend(
+            metric_display_cols
+        )
+        result_with_flags: list[
+            tuple[ColumnGroup, list[ExcelColumn]]
+        ] = []
+        for group_name_val in COLUMN_GROUPS_ORDER:
+            cols_in_group_val = grouped_display_columns.get(
+                group_name_val, []
             )
-        else:
-            pre_eval_index = -1
-            for i, col in enumerate(combined_cols):
-                if col["id"] == "pre_eval":
-                    pre_eval_index = i + 1
-                    break
-            if pre_eval_index != -1:
-                combined_cols[
-                    pre_eval_index:pre_eval_index
-                ] = metric_columns_to_add
-            else:
-                rating_index = -1
-                for i, col in enumerate(combined_cols):
-                    if col["id"] == "rating_not_weighted":
-                        rating_index = i
-                        break
-                if rating_index != -1:
-                    combined_cols[
-                        rating_index:rating_index
-                    ] = metric_columns_to_add
+            processed_cols_in_group: list[ExcelColumn] = []
+            movable_indices_in_this_group = [
+                i
+                for i, c in enumerate(cols_in_group_val)
+                if c.get("movable_within_group")
+            ]
+            first_movable_idx = (
+                movable_indices_in_this_group[0]
+                if movable_indices_in_this_group
+                else -1
+            )
+            last_movable_idx = (
+                movable_indices_in_this_group[-1]
+                if movable_indices_in_this_group
+                else -1
+            )
+            for i, col_data_item_orig in enumerate(
+                cols_in_group_val
+            ):
+                col_data_item = col_data_item_orig.copy()
+                is_movable = col_data_item.get(
+                    "movable_within_group", False
+                )
+                if is_movable:
+                    col_data_item[
+                        "is_first_movable_in_group"
+                    ] = (i == first_movable_idx)
+                    col_data_item[
+                        "is_last_movable_in_group"
+                    ] = (i == last_movable_idx)
                 else:
-                    first_rating_or_notes_index = len(
-                        combined_cols
-                    )
-                    for i, col in reversed(
-                        list(enumerate(combined_cols))
-                    ):
-                        if col["id"] in [
-                            "rating_not_weighted",
-                            "rating_weighted",
-                            "weighted_rating_length",
-                            "additional_notes",
-                        ]:
-                            first_rating_or_notes_index = i
-                        else:
-                            break
-                    combined_cols[
-                        first_rating_or_notes_index:first_rating_or_notes_index
-                    ] = metric_columns_to_add
-        return combined_cols
+                    col_data_item[
+                        "is_first_movable_in_group"
+                    ] = False
+                    col_data_item[
+                        "is_last_movable_in_group"
+                    ] = False
+                processed_cols_in_group.append(
+                    col_data_item
+                )
+            result_with_flags.append(
+                (group_name_val, processed_cols_in_group)
+            )
+        return result_with_flags
+
+    @rx.var
+    def display_excel_columns(self) -> list[ExcelColumn]:
+        """Flattens final_excel_columns_for_display for older summary views and formula modal."""
+        flat_list: list[ExcelColumn] = []
+        for (
+            _,
+            cols_in_group,
+        ) in self.final_excel_columns_for_display:
+            flat_list.extend(cols_in_group)
+        return flat_list

@@ -1,12 +1,5 @@
 import reflex as rx
-from typing import (
-    Optional,
-    TypedDict,
-    Union,
-    Dict,
-    List,
-    Tuple,
-)
+from typing import Optional, TypedDict
 import logging
 from app.states.file_prep_state import (
     DEFAULT_README_TEXT,
@@ -25,17 +18,10 @@ class MetricsConfig(TypedDict):
     custom: list[CustomMetric]
 
 
-def get_default_user_excel_columns() -> List[ExcelColumn]:
+def get_default_excel_columns() -> list[ExcelColumn]:
     return [
-        ExcelColumn(
-            name=col["name"],
-            id=col["id"],
-            required=col["required"],
-            editable=col["editable"],
-            metric_source=col["metric_source"],
-        )
-        for col in DEFAULT_EXCEL_COLUMNS_DATA
-        if not col.get("metric_source", False)
+        ExcelColumn(**col_data)
+        for col_data in DEFAULT_EXCEL_COLUMNS_DATA
     ]
 
 
@@ -45,37 +31,37 @@ class ProjectState(rx.State):
     projects: list[str] = ["Default Project"]
     selected_project: Optional[str] = None
     new_project_name: str = ""
-    project_language_pairs: Dict[
-        str, List[Tuple[str, str]]
+    project_language_pairs: dict[
+        str, list[tuple[str, str]]
     ] = {"Default Project": []}
-    project_mt_engines: Dict[str, List[str]] = {
+    project_mt_engines: dict[str, list[str]] = {
         "Default Project": []
     }
-    project_readme_content: Dict[str, str] = {
+    project_readme_content: dict[str, str] = {
         "Default Project": DEFAULT_README_TEXT
     }
-    project_stakeholder_comments: Dict[str, str] = {
+    project_stakeholder_comments: dict[str, str] = {
         "Default Project": ""
     }
-    project_included_metrics: Dict[str, MetricsConfig] = {
+    project_included_metrics: dict[str, MetricsConfig] = {
         "Default Project": {
             "evergreen": list(EVERGREEN_METRICS.keys()),
             "custom": [],
         }
     }
-    project_metric_weights: Dict[str, Dict[str, int]] = {
+    project_metric_weights: dict[str, dict[str, int]] = {
         "Default Project": {
             metric: 5 for metric in EVERGREEN_METRICS
         }
     }
-    project_pass_threshold: Dict[str, Optional[float]] = {
+    project_pass_threshold: dict[str, Optional[float]] = {
         "Default Project": None
     }
-    project_pass_definition: Dict[str, str] = {
+    project_pass_definition: dict[str, str] = {
         "Default Project": ""
     }
-    project_excel_columns: Dict[str, List[ExcelColumn]] = {
-        "Default Project": get_default_user_excel_columns()
+    project_excel_columns: dict[str, list[ExcelColumn]] = {
+        "Default Project": get_default_excel_columns()
     }
 
     def _initialize_project_data(self, project_name: str):
@@ -113,7 +99,7 @@ class ProjectState(rx.State):
             self.project_pass_definition[project_name] = ""
         if project_name not in self.project_excel_columns:
             self.project_excel_columns[project_name] = (
-                get_default_user_excel_columns()
+                get_default_excel_columns()
             )
 
     @rx.event
@@ -210,7 +196,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_pairs(
         self,
-    ) -> List[Tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
         return (
             list(
                 self.project_language_pairs.get(
@@ -222,7 +208,7 @@ class ProjectState(rx.State):
         )
 
     @rx.var
-    def current_project_engines(self) -> List[str]:
+    def current_project_engines(self) -> list[str]:
         return (
             list(
                 self.project_mt_engines.get(
@@ -269,7 +255,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_metric_weights(
         self,
-    ) -> Optional[Dict[str, int]]:
+    ) -> Optional[dict[str, int]]:
         weights = (
             self.project_metric_weights.get(
                 self.selected_project
@@ -304,9 +290,9 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_excel_columns(
         self,
-    ) -> List[ExcelColumn]:
-        """Gets the user-manageable columns for the current project (without original_index)."""
-        default_cols = get_default_user_excel_columns()
+    ) -> list[ExcelColumn]:
+        """Gets the base excel columns for the current project."""
+        default_cols = get_default_excel_columns()
         cols = (
             self.project_excel_columns.get(
                 self.selected_project, default_cols
@@ -314,4 +300,4 @@ class ProjectState(rx.State):
             if self.selected_project
             else default_cols
         )
-        return list(cols)
+        return [ExcelColumn(**c) for c in cols]

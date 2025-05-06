@@ -2,27 +2,25 @@ import reflex as rx
 from app.states.file_prep_state import (
     FilePrepState,
     ExcelColumn,
+    ColumnGroup,
 )
-from typing import Optional
+from typing import List, Tuple
 
 
-def column_item(column: ExcelColumn) -> rx.Component:
-    """Displays a single column item horizontally as a card."""
+def column_card_item(
+    column: rx.Var[ExcelColumn],
+) -> rx.Component:
+    """Displays a single column item as a card within its group."""
     is_editing = (
         FilePrepState.editing_column_id == column["id"]
     )
-    original_index_var = column["original_index"]
-    is_editable_with_index = column["editable"] & (
-        original_index_var != None
-    )
-    is_first = is_editable_with_index & (
-        original_index_var == 0
-    )
-    is_last = is_editable_with_index & (
-        original_index_var
-        == FilePrepState.excel_columns.length() - 1
-    )
-    can_trigger_edit = column["editable"]
+    is_first_in_movable_group = column[
+        "is_first_movable_in_group"
+    ]
+    is_last_in_movable_group = column[
+        "is_last_movable_in_group"
+    ]
+    has_formula = column["formula_description"].length() > 0
     return rx.el.div(
         rx.el.div(
             rx.cond(
@@ -49,106 +47,243 @@ def column_item(column: ExcelColumn) -> rx.Component:
                         rx.icon(tag="check", size=16),
                         on_click=FilePrepState.save_column_name,
                         class_name="ml-1 px-1.5 py-1 bg-green-500 text-white rounded hover:bg-green-600",
-                        size="1",
                     ),
                     rx.el.button(
                         rx.icon(tag="x", size=16),
                         on_click=FilePrepState.cancel_editing_column_name,
                         class_name="ml-1 px-1.5 py-1 bg-red-500 text-white rounded hover:bg-red-600",
-                        size="1",
                     ),
-                    class_name="flex items-center w-full",
+                    class_name="flex items-center w-full mb-1",
                 ),
-                rx.el.span(
-                    column["name"],
-                    class_name=rx.cond(
-                        can_trigger_edit,
-                        "font-medium text-gray-800 text-sm cursor-pointer hover:text-blue-600",
-                        "font-medium text-gray-600 text-sm italic",
-                    ),
-                    on_double_click=rx.cond(
-                        can_trigger_edit,
-                        FilePrepState.start_editing_column_name(
-                            column["id"]
+                rx.el.div(
+                    rx.el.h6(
+                        column["name"],
+                        class_name=rx.cond(
+                            column["editable_name"],
+                            "font-semibold text-gray-800 text-md cursor-pointer hover:text-blue-600",
+                            "font-semibold text-gray-700 text-md italic",
                         ),
-                        rx.noop(),
+                        on_double_click=rx.cond(
+                            column["editable_name"],
+                            FilePrepState.start_editing_column_name(
+                                column["id"]
+                            ),
+                            rx.noop(),
+                        ),
                     ),
+                    rx.cond(
+                        has_formula,
+                        rx.el.button(
+                            rx.icon(
+                                tag="info",
+                                size=14,
+                                class_name="text-blue-500",
+                            ),
+                            on_click=lambda: FilePrepState.show_formula_info(
+                                column["id"]
+                            ),
+                            class_name="ml-2 p-1 hover:bg-blue-100 rounded-full",
+                            title="View Formula Info",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="flex items-center",
                 ),
             ),
-            class_name="flex-1 min-w-0 mb-2 pb-2 border-b border-gray-200",
+            rx.el.p(
+                column["description"],
+                class_name="text-xs text-gray-500 mt-1",
+            ),
+            class_name="flex-grow",
         ),
         rx.el.div(
             rx.cond(
-                ~is_editing & is_editable_with_index,
-                rx.fragment(
-                    rx.el.button(
-                        rx.icon(
-                            tag="chevron-left", size=16
+                ~is_editing
+                & (
+                    column["editable_name"]
+                    | column["movable_within_group"]
+                ),
+                rx.el.div(
+                    rx.cond(
+                        column["editable_name"],
+                        rx.el.button(
+                            rx.icon(tag="pencil", size=14),
+                            on_click=lambda: FilePrepState.start_editing_column_name(
+                                column["id"]
+                            ),
+                            class_name="p-1 text-blue-500 hover:text-blue-700",
+                            title="Edit Name",
                         ),
-                        on_click=lambda: FilePrepState.move_column(
-                            column["id"], "left"
-                        ),
-                        disabled=is_first,
-                        class_name="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed",
-                        size="1",
+                        rx.fragment(),
                     ),
-                    rx.el.button(
-                        rx.icon(tag="pencil", size=16),
-                        on_click=lambda: FilePrepState.start_editing_column_name(
-                            column["id"]
+                    rx.cond(
+                        column["movable_within_group"],
+                        rx.fragment(
+                            rx.el.button(
+                                rx.icon(
+                                    tag="chevron-up",
+                                    size=14,
+                                ),
+                                on_click=lambda: FilePrepState.move_column(
+                                    column["id"], "left"
+                                ),
+                                disabled=is_first_in_movable_group,
+                                class_name="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed",
+                                title="Move Up",
+                            ),
+                            rx.el.button(
+                                rx.icon(
+                                    tag="chevron-down",
+                                    size=14,
+                                ),
+                                on_click=lambda: FilePrepState.move_column(
+                                    column["id"], "right"
+                                ),
+                                disabled=is_last_in_movable_group,
+                                class_name="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed",
+                                title="Move Down",
+                            ),
                         ),
-                        class_name="p-1 text-blue-500 hover:text-blue-700",
-                        size="1",
+                        rx.fragment(),
                     ),
-                    rx.el.button(
-                        rx.icon(
-                            tag="chevron-right", size=16
-                        ),
-                        on_click=lambda: FilePrepState.move_column(
-                            column["id"], "right"
-                        ),
-                        disabled=is_last,
-                        class_name="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed",
-                        size="1",
-                    ),
+                    class_name="flex items-center space-x-1",
                 ),
                 rx.fragment(),
             ),
-            class_name="flex items-center justify-between h-8",
+            class_name="mt-2 flex justify-end",
         ),
         class_name=rx.cond(
             column["metric_source"],
-            "flex-shrink-0 w-40 h-24 p-3 border border-dashed border-green-400 rounded bg-green-50 shadow flex flex-col justify-between",
-            "flex-shrink-0 w-40 h-24 p-3 border border-gray-300 rounded bg-white shadow flex flex-col justify-between",
+            "p-3 border border-dashed border-green-400 rounded bg-green-50 shadow-sm mb-2 flex flex-col justify-between",
+            "p-3 border border-gray-300 rounded bg-white shadow-sm mb-2 flex flex-col justify-between",
         ),
     )
 
 
+def column_group_section(
+    group_data: rx.Var[
+        Tuple[ColumnGroup, List[ExcelColumn]]
+    ],
+) -> rx.Component:
+    group_name: rx.Var[ColumnGroup] = group_data[0]
+    columns_in_group: rx.Var[List[ExcelColumn]] = (
+        group_data[1]
+    )
+    return rx.el.div(
+        rx.el.h5(
+            group_name,
+            class_name="text-lg font-semibold mb-3 text-gray-700 capitalize p-2 bg-gray-100 rounded-t-md border-b border-gray-200",
+        ),
+        rx.el.div(
+            rx.cond(
+                columns_in_group.length() > 0,
+                rx.foreach(
+                    columns_in_group, column_card_item
+                ),
+                rx.el.p(
+                    "No columns in this group.",
+                    class_name="text-sm text-gray-500 p-3 italic",
+                ),
+            ),
+            class_name="p-3",
+        ),
+        class_name="mb-6 border border-gray-200 rounded-md shadow",
+    )
+
+
+def formula_info_dialog() -> rx.Component:
+    """Dialog to display formula information for a selected column."""
+    return rx.el.dialog(
+        rx.cond(
+            FilePrepState.selected_column_for_formula,
+            rx.el.div(
+                rx.el.h3(
+                    "Formula Information: ",
+                    rx.el.span(
+                        FilePrepState.selected_column_for_formula[
+                            "name"
+                        ],
+                        class_name="font-bold",
+                    ),
+                    class_name="text-xl font-semibold text-gray-800 mb-4",
+                ),
+                rx.el.div(
+                    rx.el.h4(
+                        "Description:",
+                        class_name="text-md font-medium text-gray-700 mb-1",
+                    ),
+                    rx.el.p(
+                        FilePrepState.selected_column_for_formula[
+                            "formula_description"
+                        ],
+                        class_name="text-sm text-gray-600 bg-gray-50 p-2 rounded border",
+                    ),
+                    class_name="mb-4",
+                ),
+                rx.el.div(
+                    rx.el.h4(
+                        "Excel-style Formula:",
+                        class_name="text-md font-medium text-gray-700 mb-1",
+                    ),
+                    rx.el.code(
+                        FilePrepState.selected_column_for_formula[
+                            "formula_excel_style"
+                        ],
+                        class_name="text-sm text-purple-700 bg-purple-50 p-2 rounded border border-purple-200 block whitespace-pre-wrap",
+                    ),
+                    class_name="mb-6",
+                ),
+                rx.el.button(
+                    "Close",
+                    on_click=FilePrepState.hide_formula_info,
+                    class_name="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400",
+                ),
+                class_name="flex flex-col",
+            ),
+            rx.el.p(
+                "No column selected for formula information.",
+                class_name="text-gray-500",
+            ),
+        ),
+        open=FilePrepState.show_formula_modal,
+        class_name="bg-white shadow-xl rounded-lg border border-slate-200 p-6 max-w-lg mx-auto transform transition-all duration-300 ease-in-out z-50",
+    )
+
+
 def column_definition_component() -> rx.Component:
-    """Component for defining and ordering Excel columns horizontally."""
+    """Component for defining Excel columns, grouped by functionality."""
     return rx.el.div(
         rx.el.h4(
             "Define Excel Export Columns",
             class_name="text-xl font-medium mb-2 text-gray-700",
         ),
         rx.el.p(
-            "Arrange the standard columns using arrows. Double-click a standard column name to edit it.",
+            "Columns are grouped by functionality. You can rename editable columns by double-clicking their name.",
             class_name="text-sm text-gray-600 mb-1",
         ),
         rx.el.p(
-            "Metric columns (dashed green border) are added automatically based on the previous step and cannot be moved or edited here.",
+            "Use the up/down arrows to reorder movable columns within their respective groups.",
+            class_name="text-sm text-gray-600 mb-1",
+        ),
+        rx.el.p(
+            "Click the ",
+            rx.icon(
+                tag="info",
+                size=12,
+                class_name="inline-block mx-0.5",
+            ),
+            " icon next to a column name to view its formula logic (if applicable).",
+            class_name="text-sm text-gray-600 mb-1",
+        ),
+        rx.el.p(
+            "Metric columns (green dashed border) are added based on prior selections and cannot be edited or moved here.",
             class_name="text-xs text-gray-500 mb-6 italic",
         ),
-        rx.el.div(
-            rx.el.div(
-                rx.foreach(
-                    FilePrepState.display_excel_columns,
-                    column_item,
-                ),
-                class_name="flex space-x-4 p-2",
-            ),
-            class_name="mb-6 border border-gray-200 rounded shadow-sm bg-gray-100 overflow-x-auto",
+        rx.foreach(
+            FilePrepState.final_excel_columns_for_display,
+            column_group_section,
         ),
+        formula_info_dialog(),
         rx.el.div(
             rx.el.button(
                 "⬅ Edit Metrics & Weighting",
