@@ -29,9 +29,7 @@ def sidebar() -> rx.Component:
         ),
         rx.el.ul(
             sidebar_link("File Prep", "file_prep"),
-            sidebar_link(
-                "Final File Prep", "final_file_prep"
-            ),
+            sidebar_link("Final Report", "final_file_prep"),
             sidebar_link(
                 "Update Tableau", "update_tableau"
             ),

@@ -5,9 +5,13 @@ from typing import (
     TYPE_CHECKING,
     Optional,
     Union,
+    List,
+    Dict,
 )
 import uuid
 import re
+import io
+import csv
 
 if TYPE_CHECKING:
     from app.states.project_state import ProjectState
@@ -57,6 +61,7 @@ class ExcelColumn(TypedDict, total=False):
     formula_excel_style: Optional[str]
     custom_user_added: bool
     removable: bool
+    allow_file_upload: Optional[bool]
 
 
 class MetricInfo(TypedDict):
@@ -76,6 +81,7 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "custom_user_added": False,
         "removable": False,
+        "allow_file_upload": True,
     },
     {
         "name": "Source",
@@ -88,6 +94,7 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "custom_user_added": False,
         "removable": False,
+        "allow_file_upload": True,
     },
     {
         "name": "Target",
@@ -100,6 +107,7 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "custom_user_added": False,
         "removable": False,
+        "allow_file_upload": True,
     },
     {
         "name": "Word Count",
@@ -206,6 +214,7 @@ GroupWithColumnsTuple = tuple[
     ColumnGroup, ColumnsInGroupList
 ]
 FinalExcelDisplayType = list[GroupWithColumnsTuple]
+MAX_PREVIEW_ROWS = 10
 
 
 class FilePrepState(rx.State):
@@ -255,7 +264,7 @@ class FilePrepState(rx.State):
     excel_columns: list[ExcelColumn] = [
         col.copy() for col in DEFAULT_EXCEL_COLUMNS_DATA
     ]
-    columns_confirmed: bool = False
+    column_structure_finalized: bool = False
     editing_column_id: Optional[str] = None
     editing_column_name: str = ""
     show_formula_modal: bool = False
@@ -270,6 +279,9 @@ class FilePrepState(rx.State):
     editing_formula_description_input: str = ""
     editing_formula_excel_style_input: str = ""
     show_formula_wizard_modal: bool = False
+    uploaded_file_data: Dict[str, List[List[str]]] = {}
+    uploaded_file_info: Dict[str, str] = {}
+    template_preview_ready: bool = False
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -628,7 +640,6 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_pass_threshold(self, threshold_str: str):
-        """Set the pass threshold after validating the input."""
         try:
             threshold_str_cleaned = str(
                 threshold_str
@@ -1000,49 +1011,34 @@ class FilePrepState(rx.State):
                 duration=3000,
             )
 
-    @rx.event
-    def proceed_to_formula_review(self):
-        if self.editing_column_id is not None:
-            yield rx.toast(
-                "Please finish editing the column name first (Save or Cancel).",
-                duration=3000,
-            )
-            return
-        if not self.columns_with_formulas:
-            yield rx.toast(
-                "No formulas to review. Proceeding to finalize.",
-                duration=2500,
-            )
-            yield FilePrepState.finalize_column_configuration
-            return
-        self.formula_review_active = True
-        self.editing_formula_column_id = None
-        yield rx.toast(
-            "Proceeding to formula review.", duration=2000
-        )
-
-    @rx.event
-    def back_to_edit_columns_from_review(self):
-        self.formula_review_active = False
-        self.editing_formula_column_id = None
-
-    @rx.event
-    async def finalize_column_configuration(self):
+    async def _save_column_structure_to_project(
+        self,
+    ) -> tuple[bool, str | None]:
+        """
+        Attempts to save the column structure. Does not yield toasts.
+        Returns:
+            A tuple (success: bool, error_message: Optional[str]).
+            success is True if saved, False otherwise.
+            error_message contains a message if success is False.
+        """
         from app.states.project_state import ProjectState
 
         if self.editing_formula_column_id is not None:
-            yield rx.toast(
-                "Please save or cancel your current formula edit before finalizing.",
-                duration=3500,
+            return (
+                False,
+                "Please save or cancel your current formula edit.",
             )
-            return
+        if self.editing_column_id is not None:
+            return (
+                False,
+                "Please save or cancel your current column name edit.",
+            )
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
-            yield rx.toast(
-                "Error: No project selected. Cannot confirm Columns.",
-                duration=4000,
+            return (
+                False,
+                "Error: No project selected. Cannot save column structure.",
             )
-            return
         project_name = project_state.selected_project
         base_columns_to_save = [
             col.copy()
@@ -1052,14 +1048,68 @@ class FilePrepState(rx.State):
         project_state.project_excel_columns[
             project_name
         ] = base_columns_to_save
-        self.columns_confirmed = True
-        self.formula_review_active = False
         self.show_formula_modal = False
         self.selected_column_for_formula = None
+        return (True, None)
+
+    @rx.event
+    async def proceed_from_column_editor(self):
+        if self.editing_column_id is not None:
+            yield rx.toast(
+                "Please finish editing the column name first (Save or Cancel).",
+                duration=3000,
+            )
+            return
+        if self.columns_with_formulas:
+            self.formula_review_active = True
+            yield rx.toast(
+                "Proceeding to formula review.",
+                duration=2000,
+            )
+        else:
+            save_successful, error_message = (
+                await self._save_column_structure_to_project()
+            )
+            if save_successful:
+                self.column_structure_finalized = True
+                self.formula_review_active = False
+                yield rx.toast(
+                    "Column structure confirmed. Proceeding to pre-load template.",
+                    duration=2500,
+                )
+            elif error_message:
+                yield rx.toast(error_message, duration=4000)
+
+    @rx.event
+    async def confirm_formulas_and_proceed_to_uploads(self):
+        if self.editing_formula_column_id is not None:
+            yield rx.toast(
+                "Please save or cancel your current formula edit before proceeding.",
+                duration=3500,
+            )
+            return
+        save_successful, error_message = (
+            await self._save_column_structure_to_project()
+        )
+        if save_successful:
+            self.column_structure_finalized = True
+            self.formula_review_active = False
+            yield rx.toast(
+                "Formulas and column structure confirmed. Proceeding to pre-load template.",
+                duration=3000,
+            )
+        elif error_message:
+            yield rx.toast(error_message, duration=4000)
+
+    @rx.event
+    def back_to_edit_columns_from_review(self):
+        """Navigates from formula review back to the column editor."""
+        self.formula_review_active = False
         self.editing_formula_column_id = None
+        self.editing_formula_description_input = ""
+        self.editing_formula_excel_style_input = ""
         yield rx.toast(
-            "Excel Columns Configured! Configuration complete.",
-            duration=3000,
+            "Returned to column editor.", duration=2000
         )
 
     def _reset_downstream_of_pairs(self):
@@ -1085,10 +1135,16 @@ class FilePrepState(rx.State):
         self._reset_downstream_of_metrics()
 
     def _reset_downstream_of_metrics(self):
-        self.columns_confirmed = False
+        self.column_structure_finalized = False
         self._reset_column_state()
         self.formula_review_active = False
         self.editing_formula_column_id = None
+        self._reset_file_upload_state()
+
+    def _reset_file_upload_state(self):
+        self.uploaded_file_data = {}
+        self.uploaded_file_info = {}
+        self.template_preview_ready = False
 
     def _reset_metric_and_pass_state(self):
         self.included_evergreen_metrics = list(
@@ -1148,6 +1204,7 @@ class FilePrepState(rx.State):
         if not project_state.selected_project:
             self._reset_metric_and_pass_state()
             self._reset_column_state()
+            self._reset_file_upload_state()
             return
         project_name = project_state.selected_project
         saved_metrics_config = (
@@ -1228,6 +1285,7 @@ class FilePrepState(rx.State):
         self.new_column_inputs = {
             group: "" for group in COLUMN_GROUPS_ORDER
         }
+        self._reset_file_upload_state()
 
     @rx.event
     def reset_state(self):
@@ -1247,12 +1305,13 @@ class FilePrepState(rx.State):
         self._reset_metric_and_pass_state()
         self.metrics_confirmed = False
         self._reset_column_state()
-        self.columns_confirmed = False
+        self.column_structure_finalized = False
         self.formula_review_active = False
         self.editing_formula_column_id = None
         self.editing_formula_description_input = ""
         self.editing_formula_excel_style_input = ""
         self.show_formula_wizard_modal = False
+        self._reset_file_upload_state()
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
@@ -1285,16 +1344,20 @@ class FilePrepState(rx.State):
             self._reset_downstream_of_metrics()
 
     @rx.event
-    def set_columns_confirmed(self, confirmed: bool):
-        self.columns_confirmed = confirmed
-        if confirmed:
-            self.show_formula_modal = False
-            self.selected_column_for_formula = None
+    def set_column_structure_finalized(
+        self, finalized: bool
+    ):
+        self.column_structure_finalized = finalized
+        if not finalized:
             self.formula_review_active = False
             self.editing_formula_column_id = None
-        elif not confirmed:
-            self.formula_review_active = False
-            self.editing_formula_column_id = None
+            self._reset_file_upload_state()
+
+    @rx.event
+    def set_template_preview_ready(self, ready: bool):
+        self.template_preview_ready = ready
+        if not ready:
+            pass
 
     @rx.event
     def show_formula_info(self, column_id: str):
@@ -1439,6 +1502,148 @@ class FilePrepState(rx.State):
     def close_formula_wizard(self):
         self.show_formula_wizard_modal = False
 
+    async def _parse_uploaded_file_content(
+        self, file: rx.UploadFile
+    ):
+        """
+        Parses file content into list of rows.
+        Yields a toast on error, then yields None.
+        Otherwise, yields the parsed data.
+        """
+        try:
+            content_bytes = await file.read()
+            content_str = content_bytes.decode("utf-8-sig")
+        except Exception as e:
+            yield rx.toast(
+                f"Error reading file {file.name}: {e}",
+                duration=5000,
+            )
+            return
+        file_data: List[List[str]] = []
+        if file.name.lower().endswith((".csv", ".tsv")):
+            try:
+                delimiter = (
+                    ","
+                    if file.name.lower().endswith(".csv")
+                    else "\t"
+                )
+                csv_reader = csv.reader(
+                    io.StringIO(content_str),
+                    delimiter=delimiter,
+                )
+                for row in csv_reader:
+                    file_data.append(
+                        [str(cell) for cell in row]
+                    )
+                yield file_data
+            except Exception as e:
+                yield rx.toast(
+                    f"Error parsing CSV/TSV {file.name}: {e}",
+                    duration=5000,
+                )
+                return
+        elif file.name.lower().endswith(".txt"):
+            file_data = [
+                [line] for line in content_str.splitlines()
+            ]
+            yield file_data
+        else:
+            yield rx.toast(
+                f"Unsupported file type: {file.name}. Please use .txt, .csv, or .tsv.",
+                duration=4000,
+            )
+            return
+
+    @rx.event
+    async def handle_file_upload(
+        self,
+        files: list[rx.UploadFile],
+        column_target_id: str,
+    ):
+        if not files:
+            return
+        file = files[0]
+        parsed_data_result: List[List[str]] | None = None
+        async for item in self._parse_uploaded_file_content(
+            file
+        ):
+            if isinstance(item, rx.event.EventSpec):
+                yield item
+            else:
+                parsed_data_result = item
+                break
+        if parsed_data_result is not None:
+            temp_uploaded_file_data = (
+                self.uploaded_file_data.copy()
+            )
+            temp_uploaded_file_info = (
+                self.uploaded_file_info.copy()
+            )
+            temp_uploaded_file_data[column_target_id] = (
+                parsed_data_result
+            )
+            temp_uploaded_file_info[column_target_id] = (
+                f"{file.name} ({len(parsed_data_result)} rows)"
+            )
+            self.uploaded_file_data = (
+                temp_uploaded_file_data
+            )
+            self.uploaded_file_info = (
+                temp_uploaded_file_info
+            )
+            yield rx.toast(
+                f"File '{file.name}' uploaded for column ID '{column_target_id}'.",
+                duration=3000,
+            )
+
+    @rx.event
+    def clear_uploaded_file(self, column_target_id: str):
+        temp_uploaded_file_data = (
+            self.uploaded_file_data.copy()
+        )
+        temp_uploaded_file_info = (
+            self.uploaded_file_info.copy()
+        )
+        if column_target_id in temp_uploaded_file_data:
+            del temp_uploaded_file_data[column_target_id]
+        if column_target_id in temp_uploaded_file_info:
+            del temp_uploaded_file_info[column_target_id]
+        self.uploaded_file_data = temp_uploaded_file_data
+        self.uploaded_file_info = temp_uploaded_file_info
+        yield rx.toast(
+            f"Cleared uploaded file for column ID '{column_target_id}'.",
+            duration=2000,
+        )
+
+    @rx.event
+    def proceed_to_generate_template_preview(self):
+        required_cols_ids = [
+            col_spec["id"]
+            for col_spec in self.template_input_columns_for_upload
+        ]
+        missing_files_display_names = []
+        for (
+            col_spec
+        ) in self.template_input_columns_for_upload:
+            if (
+                col_spec["id"]
+                not in self.uploaded_file_data
+            ):
+                missing_files_display_names.append(
+                    col_spec["name"]
+                )
+        if missing_files_display_names:
+            yield rx.toast(
+                f"Please upload files for: {', '.join(missing_files_display_names)}.",
+                duration=4000,
+            )
+            return
+        self.template_preview_ready = True
+        yield rx.toast(
+            "Files processed. Generating preview...",
+            duration=2000,
+        )
+
     @rx.var
     def is_add_pair_disabled(self) -> bool:
         return (
@@ -1502,8 +1707,16 @@ class FilePrepState(rx.State):
         return False
 
     @rx.var
-    def is_proceed_to_review_disabled(self) -> bool:
+    def is_proceed_from_column_editor_disabled(
+        self,
+    ) -> bool:
         return self.editing_column_id is not None
+
+    @rx.var
+    def is_confirm_formulas_and_proceed_disabled(
+        self,
+    ) -> bool:
+        return self.editing_formula_column_id is not None
 
     @rx.var
     def final_readme_content(self) -> str:
@@ -1598,6 +1811,9 @@ class FilePrepState(rx.State):
                     ),
                     "is_first_movable_in_group": False,
                     "is_last_movable_in_group": False,
+                    "allow_file_upload": col_data.get(
+                        "allow_file_upload", False
+                    ),
                 }
                 grouped_display_columns[group].append(
                     full_col_data
@@ -1623,6 +1839,7 @@ class FilePrepState(rx.State):
                     removable=False,
                     is_first_movable_in_group=False,
                     is_last_movable_in_group=False,
+                    allow_file_upload=False,
                 )
             )
         if "Metric" not in grouped_display_columns:
@@ -1689,7 +1906,6 @@ class FilePrepState(rx.State):
 
     @rx.var
     def display_excel_columns(self) -> list[ExcelColumn]:
-        """Flattens final_excel_columns_for_display for older summary views and formula modal."""
         flat_list: list[ExcelColumn] = []
         for (
             _,
@@ -1700,10 +1916,75 @@ class FilePrepState(rx.State):
 
     @rx.var
     def columns_with_formulas(self) -> list[ExcelColumn]:
-        """Returns a list of columns that have defined formulas for the review page."""
         return [
             col
             for col in self.display_excel_columns
             if col.get("formula_description")
             or col.get("formula_excel_style")
+        ]
+
+    @rx.var
+    def template_input_columns_for_upload(
+        self,
+    ) -> List[ExcelColumn]:
+        """Returns columns from 'Input' group that allow file upload."""
+        return [
+            col
+            for col in self.display_excel_columns
+            if col["group"] == "Input"
+            and col.get("allow_file_upload")
+        ]
+
+    @rx.var
+    def preview_table_data(self) -> List[Dict[str, str]]:
+        """Prepares data for the preview table, aligning rows from uploaded files."""
+        if (
+            not self.template_preview_ready
+            or not self.uploaded_file_data
+        ):
+            return []
+        num_rows = 0
+        if self.uploaded_file_data:
+            num_rows = max(
+                (
+                    len(data)
+                    for data in self.uploaded_file_data.values()
+                    if data
+                ),
+                default=0,
+            )
+        num_rows_to_show = min(num_rows, MAX_PREVIEW_ROWS)
+        preview_rows: List[Dict[str, str]] = []
+        input_column_specs = [
+            col_spec
+            for col_spec in self.display_excel_columns
+            if col_spec["group"] == "Input"
+        ]
+        for i in range(num_rows_to_show):
+            row_dict: Dict[str, str] = {}
+            for col_spec in input_column_specs:
+                col_id = col_spec["id"]
+                col_name = col_spec["name"]
+                data_for_col = self.uploaded_file_data.get(
+                    col_id
+                )
+                if data_for_col and i < len(data_for_col):
+                    row_dict[col_name] = (
+                        data_for_col[i][0]
+                        if data_for_col[i]
+                        else ""
+                    )
+                else:
+                    row_dict[col_name] = ""
+            preview_rows.append(row_dict)
+        return preview_rows
+
+    @rx.var
+    def preview_table_headers(self) -> List[str]:
+        if not self.template_preview_ready:
+            return []
+        return [
+            col["name"]
+            for col in self.display_excel_columns
+            if col["group"] == "Input"
         ]

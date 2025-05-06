@@ -110,7 +110,7 @@ def _column_item_component(
                 col_data.get("formula_description")
                 | col_data.get("formula_excel_style"),
                 _icon_button(
-                    "square-sigma",
+                    "square_sigma",
                     lambda: FilePrepState.show_formula_info(
                         cast(str, col_data["id"])
                     ),
@@ -125,7 +125,7 @@ def _column_item_component(
                     lambda: FilePrepState.remove_column_by_id(
                         cast(str, col_data["id"])
                     ),
-                    "Remove Field",
+                    "Remove Column",
                     extra_class_name="text-red-500 hover:text-red-700",
                 ),
                 rx.fragment(),
@@ -188,7 +188,7 @@ def _column_editor_view() -> rx.Component:
     """View for editing the main column structure."""
     return rx.el.div(
         rx.el.p(
-            "Use the columns below to map out your evaluation. The metrics are defined from your selections in the previous step. You will have the chance to review Excel formulas after this step.",
+            "Arrange, rename, add, or remove columns for your evaluation template. Metric columns are automatically added based on your selections in the previous step.",
             class_name="text-sm text-gray-600 mb-4",
         ),
         rx.foreach(
@@ -207,11 +207,11 @@ def _column_editor_view() -> rx.Component:
                 rx.cond(
                     FilePrepState.columns_with_formulas.length()
                     > 0,
-                    "Review Formulas & Finalize ➡",
-                    "Finalize Column Configuration ➡",
+                    "Review Formulas & Pre-load Template ➡",
+                    "Pre-load Template ➡",
                 ),
-                on_click=FilePrepState.proceed_to_formula_review,
-                disabled=FilePrepState.is_proceed_to_review_disabled,
+                on_click=FilePrepState.proceed_from_column_editor,
+                disabled=FilePrepState.is_proceed_from_column_editor_disabled,
                 class_name="px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150",
             ),
             class_name="flex justify-between items-center mt-6 border-t border-gray-200 pt-4",
@@ -317,7 +317,7 @@ def _formula_review_item_component(
                     class_name="text-sm text-gray-700 font-mono",
                 ),
                 _icon_button(
-                    "square-sigma",
+                    "pencil",
                     lambda: FilePrepState.start_editing_formula(
                         cast(str, col_data["id"])
                     ),
@@ -354,8 +354,9 @@ def _formula_review_view() -> rx.Component:
                 class_name="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition duration-150",
             ),
             rx.el.button(
-                "Finalize Column Configuration ➡",
-                on_click=FilePrepState.finalize_column_configuration,
+                "Pre-load Template ➡",
+                on_click=FilePrepState.confirm_formulas_and_proceed_to_uploads,
+                disabled=FilePrepState.is_confirm_formulas_and_proceed_disabled,
                 class_name="px-6 py-3 bg-blue-600 text-white rounded-lg shadow font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150",
             ),
             class_name="flex justify-between items-center mt-6 border-t border-gray-200 pt-4",

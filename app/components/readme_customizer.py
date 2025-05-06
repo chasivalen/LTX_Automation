@@ -3,7 +3,6 @@ from app.states.file_prep_state import (
     FilePrepState,
     ReadmeChoice,
 )
-from reflex_monaco import monaco
 
 
 def readme_choice_radio(
@@ -77,19 +76,13 @@ def readme_customizer_component() -> rx.Component:
                         "Edit Instructions (Markdown Supported):",
                         class_name="text-lg font-medium mb-2 text-gray-600",
                     ),
-                    monaco(
+                    rx.el.textarea(
                         default_value=FilePrepState.custom_readme_content,
-                        language="markdown",
-                        height="300px",
-                        theme="vs-light",
-                        options={
-                            "wordWrap": "on",
-                            "minimap": {"enabled": False},
-                        },
                         on_change=FilePrepState.set_custom_readme_content.debounce(
                             300
                         ),
-                        class_name="border border-gray-300 rounded shadow-sm",
+                        placeholder="Enter markdown content here...",
+                        class_name="w-full p-2 border border-gray-300 rounded shadow-sm min-h-[300px] focus:outline-none focus:ring-2 focus:ring-blue-500",
                     ),
                     class_name="mb-6",
                 ),
@@ -101,19 +94,13 @@ def readme_customizer_component() -> rx.Component:
                         "Create New Instructions (Markdown Supported):",
                         class_name="text-lg font-medium mb-2 text-gray-600",
                     ),
-                    monaco(
+                    rx.el.textarea(
                         default_value=FilePrepState.custom_readme_content,
-                        language="markdown",
-                        height="300px",
-                        theme="vs-light",
-                        options={
-                            "wordWrap": "on",
-                            "minimap": {"enabled": False},
-                        },
                         on_change=FilePrepState.set_custom_readme_content.debounce(
                             300
                         ),
-                        class_name="border border-gray-300 rounded shadow-sm",
+                        placeholder="Enter markdown content here...",
+                        class_name="w-full p-2 border border-gray-300 rounded shadow-sm min-h-[300px] focus:outline-none focus:ring-2 focus:ring-blue-500",
                     ),
                     class_name="mb-6",
                 ),
