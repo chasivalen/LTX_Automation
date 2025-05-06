@@ -233,10 +233,7 @@ class FilePrepState(rx.State):
     current_target_language: Optional[Language] = None
     selected_pairs_for_session: list[tuple[str, str]] = []
     pairs_confirmed: bool = False
-    available_engines: list[str] = [
-        "Banana MT",
-        "Banana FM",
-    ]
+    available_engines: list[str] = ["\uf8ffMT", "\uf8ffFM"]
     selected_engines: list[str] = []
     new_engine_name: str = ""
     engines_confirmed: bool = False
@@ -370,7 +367,7 @@ class FilePrepState(rx.State):
             self.pairs_confirmed = True
             self._reset_downstream_of_pairs()
             yield rx.toast(
-                "Language pairs confirmed! Select MT engines next.",
+                "Language pairs confirmed! Set MT model(s) next.",
                 duration=3000,
             )
         else:
@@ -404,12 +401,12 @@ class FilePrepState(rx.State):
             self.new_engine_name = ""
         elif not name:
             yield rx.toast(
-                "Please enter an engine name.",
+                "Please enter 3rd party model(s).",
                 duration=3000,
             )
         else:
             yield rx.toast(
-                f"Engine '{name}' is already selected.",
+                f"The model, '{name}', is already selected.",
                 duration=3000,
             )
 
@@ -427,7 +424,7 @@ class FilePrepState(rx.State):
 
         if not self.selected_engines:
             yield rx.toast(
-                "Please select or add at least one MT engine.",
+                "Please select or add at least one MT model.",
                 duration=3000,
             )
             return
@@ -442,12 +439,12 @@ class FilePrepState(rx.State):
             self.engines_confirmed = True
             self._reset_downstream_of_engines()
             yield rx.toast(
-                "MT Engines confirmed! Customize Read Me instructions next.",
+                "MT Model(s) confirmed! Customize Read Me instructions next.",
                 duration=3000,
             )
         else:
             yield rx.toast(
-                "Error: No project selected. Cannot confirm engines.",
+                "Error: No project selected. Cannot confirm MT model.",
                 duration=4000,
             )
 
@@ -640,6 +637,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     def set_pass_threshold(self, threshold_str: str):
+        """Set the pass threshold after validating the input."""
         try:
             threshold_str_cleaned = str(
                 threshold_str
@@ -1293,7 +1291,7 @@ class FilePrepState(rx.State):
         self.current_target_language = None
         self.selected_pairs_for_session = []
         self.pairs_confirmed = False
-        self.available_engines = ["Banana MT", "Banana FM"]
+        self.available_engines = ["\uf8ffMT", "\uf8ffFM"]
         self.selected_engines = []
         self.new_engine_name = ""
         self.engines_confirmed = False
