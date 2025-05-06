@@ -11,16 +11,16 @@ def _file_uploader_for_column(
     column_data_arg: ExcelColumn,
 ) -> rx.Component:
     """Creates a file upload interface for a specific input column."""
-    column_id = column_data_arg["id"]
-    column_name = column_data_arg["name"]
-    upload_id = f"upload_{column_id}"
+    column_id_str: str = str(column_data_arg["id"])
+    column_name_str: str = str(column_data_arg["name"])
+    upload_id_str: str = f"upload_{column_id_str}"
     file_info_str = FilePrepState.uploaded_file_info.get(
-        column_id, ""
+        column_id_str, ""
     )
     is_file_uploaded = file_info_str != ""
     return rx.el.div(
         rx.el.h6(
-            f"Upload for '{column_name}'",
+            f"Upload for '{column_name_str}'",
             class_name="text-md font-medium mb-2 text-gray-700",
         ),
         rx.cond(
@@ -37,7 +37,7 @@ def _file_uploader_for_column(
                 rx.el.button(
                     "Clear Upload",
                     on_click=lambda: FilePrepState.clear_uploaded_file(
-                        column_id
+                        column_id_str
                     ),
                     class_name="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600",
                 ),
@@ -51,7 +51,7 @@ def _file_uploader_for_column(
                     ),
                     rx.el.p(
                         rx.el.span(
-                            f"Click to upload for {column_name}",
+                            f"Click to upload for {column_name_str}",
                             class_name="font-semibold",
                         ),
                         " or drag and drop",
@@ -63,7 +63,7 @@ def _file_uploader_for_column(
                     ),
                     class_name="flex flex-col items-center justify-center py-4 px-2 text-center",
                 ),
-                id=upload_id,
+                id=upload_id_str,
                 multiple=False,
                 accept={
                     "text/plain": [".txt"],
@@ -71,8 +71,10 @@ def _file_uploader_for_column(
                     "text/tab-separated-values": [".tsv"],
                 },
                 on_drop=FilePrepState.handle_file_upload(
-                    rx.upload_files(upload_id=upload_id),
-                    column_id,
+                    rx.upload_files(
+                        upload_id=upload_id_str
+                    ),
+                    column_id_str,
                 ),
                 border="2px dashed #d1d5db",
                 padding="1rem",
