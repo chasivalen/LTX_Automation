@@ -7,6 +7,7 @@ from typing import (
     Union,
     List,
     Dict,
+    cast,
 )
 import uuid
 import re
@@ -69,6 +70,16 @@ class MetricInfo(TypedDict):
     definition: str
 
 
+CJK_LANGUAGES: set[Language] = {
+    "Chinese",
+    "Japanese",
+    "Korean",
+}
+SOURCE_CELL_DYNAMIC_FORMULA_PART = (
+    'INDIRECT(ADDRESS(ROW(),MATCH("*Source*",1:1,0)))'
+)
+CJK_WORD_COUNT_EXCEL_FORMULA = f"=IF(ISBLANK({SOURCE_CELL_DYNAMIC_FORMULA_PART}),0,LEN(TRIM({SOURCE_CELL_DYNAMIC_FORMULA_PART})))"
+GENERIC_WORD_COUNT_EXCEL_FORMULA = f'=IF(ISBLANK({SOURCE_CELL_DYNAMIC_FORMULA_PART}), 0, COUNTA(FILTERXML("<t><s>" & SUBSTITUTE(TRIM({SOURCE_CELL_DYNAMIC_FORMULA_PART})," ","</s><s>") & "</s></t>","//s")))'
 DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
     {
         "name": "File Name",
@@ -113,13 +124,13 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "name": "Word Count",
         "id": "word_count",
         "group": "Pre-Evaluation",
-        "description": "Source word count (formula driven). Dynamically finds the 'Source' column.",
+        "description": "Source word count (formula driven). Dynamically finds the 'Source' column. Formula adapts to CJK/Generic languages.",
         "editable_name": True,
         "movable_within_group": True,
         "required": False,
         "metric_source": False,
-        "formula_description": "Calculates the number of words in the 'Source' column for the current row. The 'Source' column is identified by finding a header in row 1 containing the word 'Source'.",
-        "formula_excel_style": '=IF(ISBLANK(INDIRECT(ADDRESS(ROW(),MATCH("*Source*",1:1,0)))), 0, COUNTA(FILTERXML("<t><s>" & SUBSTITUTE(TRIM(INDIRECT(ADDRESS(ROW(),MATCH("*Source*",1:1,0))))," ","</s><s>") & "</s></t>","//s")))',
+        "formula_description": "Calculates the number of words in the 'Source' column for the current row. The 'Source' column is identified by finding a header in row 1 containing the word 'Source'. The formula attempts to use character count for CJK languages and word count for others.",
+        "formula_excel_style": GENERIC_WORD_COUNT_EXCEL_FORMULA,
         "custom_user_added": False,
         "removable": True,
     },
@@ -279,6 +290,35 @@ class FilePrepState(rx.State):
     uploaded_file_data: Dict[str, List[List[str]]] = {}
     uploaded_file_info: Dict[str, str] = {}
     template_preview_ready: bool = False
+
+    def _update_word_count_excel_formula(
+        self, source_language: Language | None
+    ):
+        """
+        Updates the Excel formula for the 'Word Count' column based on the source language.
+        Uses character count for CJK languages, and a generic word count for others.
+        """
+        new_excel_columns = [
+            col.copy() for col in self.excel_columns
+        ]
+        word_count_column_updated = False
+        for i, col in enumerate(new_excel_columns):
+            if col.get("id") == "word_count":
+                if (
+                    source_language
+                    and source_language in CJK_LANGUAGES
+                ):
+                    new_excel_columns[i][
+                        "formula_excel_style"
+                    ] = CJK_WORD_COUNT_EXCEL_FORMULA
+                else:
+                    new_excel_columns[i][
+                        "formula_excel_style"
+                    ] = GENERIC_WORD_COUNT_EXCEL_FORMULA
+                word_count_column_updated = True
+                break
+        if word_count_column_updated:
+            self.excel_columns = new_excel_columns
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -734,6 +774,21 @@ class FilePrepState(rx.State):
                 col.copy()
                 for col in DEFAULT_EXCEL_COLUMNS_DATA
             ]
+        project_langs = (
+            project_state.project_language_pairs.get(
+                project_name, []
+            )
+        )
+        primary_source_lang_for_project: Language | None = (
+            None
+        )
+        if project_langs:
+            primary_source_lang_for_project = cast(
+                Language, project_langs[0][0]
+            )
+        self._update_word_count_excel_formula(
+            primary_source_lang_for_project
+        )
         self.editing_column_id = None
         self.editing_column_name = ""
         yield rx.toast(
@@ -1278,6 +1333,21 @@ class FilePrepState(rx.State):
                 col_data.copy()
                 for col_data in DEFAULT_EXCEL_COLUMNS_DATA
             ]
+        project_langs = (
+            project_state.project_language_pairs.get(
+                project_name, []
+            )
+        )
+        primary_source_lang_for_project: Language | None = (
+            None
+        )
+        if project_langs:
+            primary_source_lang_for_project = cast(
+                Language, project_langs[0][0]
+            )
+        self._update_word_count_excel_formula(
+            primary_source_lang_for_project
+        )
         self.editing_column_id = None
         self.editing_column_name = ""
         self.new_column_inputs = {
@@ -1303,6 +1373,7 @@ class FilePrepState(rx.State):
         self._reset_metric_and_pass_state()
         self.metrics_confirmed = False
         self._reset_column_state()
+        self._update_word_count_excel_formula(None)
         self.column_structure_finalized = False
         self.formula_review_active = False
         self.editing_formula_column_id = None
