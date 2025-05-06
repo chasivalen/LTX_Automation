@@ -173,6 +173,11 @@ COLUMN_GROUPS_ORDER: list[ColumnGroup] = [
     "Calculated Score",
     "Freeform",
 ]
+ColumnsInGroupList = list[ExcelColumn]
+GroupWithColumnsTuple = tuple[
+    ColumnGroup, ColumnsInGroupList
+]
+FinalExcelDisplayType = list[GroupWithColumnsTuple]
 
 
 class FilePrepState(rx.State):
@@ -398,10 +403,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def set_readme_choice(self, choice: ReadmeChoice):
-        from app.states.project_state import ProjectState
-
         self.readme_choice = choice
-        project_state = await self.get_state(ProjectState)
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
@@ -589,7 +591,7 @@ class FilePrepState(rx.State):
     @rx.event
     def set_pass_threshold(self, threshold_str: str):
         try:
-            if threshold_str == "":
+            if not threshold_str.strip():
                 self.pass_threshold = None
             else:
                 threshold = float(threshold_str)
@@ -1231,9 +1233,9 @@ class FilePrepState(rx.State):
     @rx.var
     def final_excel_columns_for_display(
         self,
-    ) -> list[tuple[ColumnGroup, list[ExcelColumn]]]:
+    ) -> FinalExcelDisplayType:
         grouped_display_columns: dict[
-            ColumnGroup, list[ExcelColumn]
+            ColumnGroup, ColumnsInGroupList
         ] = {group: [] for group in COLUMN_GROUPS_ORDER}
         for col_data_orig in self.excel_columns:
             if col_data_orig.get("metric_source"):
@@ -1275,7 +1277,7 @@ class FilePrepState(rx.State):
                 grouped_display_columns[group].append(
                     full_col_data
                 )
-        metric_display_cols: list[ExcelColumn] = []
+        metric_display_cols: ColumnsInGroupList = []
         for metric_info in self.all_included_metrics:
             metric_name = metric_info["name"]
             metric_col_id = f"metric_{metric_name.lower().replace(' ', '_').replace('/', '_')}"
@@ -1298,14 +1300,12 @@ class FilePrepState(rx.State):
         grouped_display_columns["Metric"].extend(
             metric_display_cols
         )
-        result_with_flags: list[
-            tuple[ColumnGroup, list[ExcelColumn]]
-        ] = []
+        result_with_flags: FinalExcelDisplayType = []
         for group_name_val in COLUMN_GROUPS_ORDER:
-            cols_in_group_val = grouped_display_columns.get(
-                group_name_val, []
+            cols_in_group_val: ColumnsInGroupList = (
+                grouped_display_columns[group_name_val]
             )
-            processed_cols_in_group: list[ExcelColumn] = []
+            processed_cols_in_group: ColumnsInGroupList = []
             movable_indices_in_this_group = [
                 i
                 for i, c in enumerate(cols_in_group_val)
