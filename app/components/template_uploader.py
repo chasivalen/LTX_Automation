@@ -8,11 +8,11 @@ from typing import List, Dict
 
 
 def _file_uploader_for_column(
-    col_item: ExcelColumn,
+    column_data_arg: ExcelColumn,
 ) -> rx.Component:
     """Creates a file upload interface for a specific input column."""
-    column_id = col_item["id"]
-    column_name = col_item["name"]
+    column_id = column_data_arg["id"]
+    column_name = column_data_arg["name"]
     upload_id = f"upload_{column_id}"
     file_info_str = FilePrepState.uploaded_file_info.get(
         column_id, ""
