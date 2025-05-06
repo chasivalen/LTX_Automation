@@ -627,12 +627,23 @@ class FilePrepState(rx.State):
         self.metric_weights = temp_weights
 
     @rx.event
-    def set_pass_threshold(self, value: float | None):
-        """Sets the pass threshold.
-        'value' is expected to be a float if the input is a valid number from type="number" input,
-        or None if the input is empty or invalid.
-        """
-        self.pass_threshold = value
+    def set_pass_threshold(self, threshold_str: str):
+        """Set the pass threshold after validating the input."""
+        try:
+            threshold_str_cleaned = str(
+                threshold_str
+            ).strip()
+            self.pass_threshold = (
+                float(threshold_str_cleaned)
+                if threshold_str_cleaned
+                else None
+            )
+        except ValueError:
+            self.pass_threshold = None
+            yield rx.toast(
+                "Please enter a valid number for the pass threshold.",
+                duration=3000,
+            )
 
     @rx.event
     def set_pass_definition(self, definition: str):
