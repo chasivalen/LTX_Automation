@@ -1,0 +1,21 @@
+{
+  "name": "Reflex Build Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11", // Use a Python 3.11 base image
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.pythonPath": "/usr/local/bin/python3"
+      },
+      "extensions": [
+        "ms-python.python", // Python support
+        "ms-python.vscode-pylance", // Pylance for Python
+        "esbenp.prettier-vscode" // Prettier for formatting
+      ]
+    }
+  },
+  "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt", // Upgrade pip and install dependencies
+  "remoteUser": "vscode" // Run as the VS Code user
+}
