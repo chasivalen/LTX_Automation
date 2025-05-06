@@ -49,6 +49,8 @@ class ExcelColumn(TypedDict, total=False):
     is_last_movable_in_group: bool
     formula_description: str | None
     formula_excel_style: str | None
+    custom_user_added: bool
+    removable: bool
 
 
 class MetricInfo(TypedDict):
@@ -62,30 +64,36 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "id": "file_name",
         "group": "Input",
         "description": "Source-driven input from uploaded files.",
-        "editable_name": False,
+        "editable_name": True,
         "movable_within_group": False,
         "required": True,
         "metric_source": False,
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Source",
         "id": "source",
         "group": "Input",
         "description": "Source text segment.",
-        "editable_name": False,
+        "editable_name": True,
         "movable_within_group": False,
         "required": True,
         "metric_source": False,
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Target",
         "id": "target",
         "group": "Input",
         "description": "Translated text segment.",
-        "editable_name": False,
+        "editable_name": True,
         "movable_within_group": False,
         "required": True,
         "metric_source": False,
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Word Count",
@@ -98,6 +106,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "formula_description": "Calculates the number of words in the 'Source' column for the current row.",
         "formula_excel_style": '=IF(ISBLANK(SourceCell),0,LEN(TRIM(SourceCell))-LEN(SUBSTITUTE(TRIM(SourceCell)," ",""))+1)',
+        "custom_user_added": False,
+        "removable": True,
     },
     {
         "name": "Pre-Eval",
@@ -108,6 +118,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "movable_within_group": True,
         "required": True,
         "metric_source": False,
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Applicable Word Count",
@@ -120,6 +132,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "formula_description": "If 'Pre-Eval' is 'Incomprehensible Input' or 'Irrelevant Target', this is 0. Otherwise, it's the 'Word Count'.",
         "formula_excel_style": '=IF(OR(PreEvalCell="Incomprehensible Input", PreEvalCell="Irrelevant Target"),0,WordCountCell)',
+        "custom_user_added": False,
+        "removable": True,
     },
     {
         "name": "Overall",
@@ -130,6 +144,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "movable_within_group": True,
         "required": True,
         "metric_source": False,
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Rating (Not Weighted)",
@@ -142,6 +158,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "formula_description": "Calculates the simple average of all included metric scores for the current row.",
         "formula_excel_style": "=AVERAGE(MetricRange)",
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Rating (Weighted)",
@@ -154,6 +172,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "metric_source": False,
         "formula_description": "Calculates the weighted average of metric scores based on their assigned weights.",
         "formula_excel_style": "=SUMPRODUCT(MetricScoreRange, MetricWeightRange) / SUM(MetricWeightRange)",
+        "custom_user_added": False,
+        "removable": False,
     },
     {
         "name": "Additional Notes",
@@ -164,6 +184,8 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
         "movable_within_group": False,
         "required": False,
         "metric_source": False,
+        "custom_user_added": False,
+        "removable": True,
     },
 ]
 COLUMN_GROUPS_ORDER: list[ColumnGroup] = [
@@ -232,6 +254,10 @@ class FilePrepState(rx.State):
     editing_column_name: str = ""
     show_formula_modal: bool = False
     selected_column_for_formula: ExcelColumn | None = None
+    new_column_inputs: dict[ColumnGroup, str] = {
+        group: "" for group in COLUMN_GROUPS_ORDER
+    }
+    formula_review_active: bool = False
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -719,22 +745,55 @@ class FilePrepState(rx.State):
         idx_swap = -1
         if direction == "left":
             for i in range(idx_target - 1, -1, -1):
-                if cols[i][
+                if cols[i]["group"] == target_group:
+                    if cols[i].get("movable_within_group"):
+                        idx_swap = i
+                        break
+            current_movable_index_in_group = -1
+            movable_items_in_group_indices = []
+            for i, col_data_item in enumerate(cols):
+                if col_data_item[
                     "group"
-                ] == target_group and cols[i].get(
+                ] == target_group and col_data_item.get(
                     "movable_within_group"
                 ):
-                    idx_swap = i
-                    break
+                    movable_items_in_group_indices.append(i)
+                    if i == idx_target:
+                        current_movable_index_in_group = (
+                            len(
+                                movable_items_in_group_indices
+                            )
+                            - 1
+                        )
+            if current_movable_index_in_group > 0:
+                idx_swap = movable_items_in_group_indices[
+                    current_movable_index_in_group - 1
+                ]
         elif direction == "right":
-            for i in range(idx_target + 1, len(cols)):
-                if cols[i][
+            current_movable_index_in_group = -1
+            movable_items_in_group_indices = []
+            for i, col_data_item in enumerate(cols):
+                if col_data_item[
                     "group"
-                ] == target_group and cols[i].get(
+                ] == target_group and col_data_item.get(
                     "movable_within_group"
                 ):
-                    idx_swap = i
-                    break
+                    movable_items_in_group_indices.append(i)
+                    if i == idx_target:
+                        current_movable_index_in_group = (
+                            len(
+                                movable_items_in_group_indices
+                            )
+                            - 1
+                        )
+            if (
+                current_movable_index_in_group != -1
+                and current_movable_index_in_group
+                < len(movable_items_in_group_indices) - 1
+            ):
+                idx_swap = movable_items_in_group_indices[
+                    current_movable_index_in_group + 1
+                ]
         if idx_swap != -1:
             cols[idx_target], cols[idx_swap] = (
                 cols[idx_swap],
@@ -746,7 +805,7 @@ class FilePrepState(rx.State):
                 self.editing_column_name = ""
         else:
             yield rx.toast(
-                "Cannot move column further in this direction.",
+                "Cannot move column further in this direction within its group.",
                 duration=2000,
             )
 
@@ -807,31 +866,20 @@ class FilePrepState(rx.State):
                 duration=3000,
             )
             return
-        if new_name != original_name:
-            if any(
-                (
-                    col["name"] == new_name
-                    and col["id"] != self.editing_column_id
-                    for col in self.excel_columns
-                    if not col.get("metric_source")
-                )
-            ):
-                yield rx.toast(
-                    f"Column name '{new_name}' already exists among base columns.",
-                    duration=3000,
-                )
-                return
-            if any(
-                (
-                    metric_info["name"] == new_name
-                    for metric_info in self.all_included_metrics
-                )
-            ):
-                yield rx.toast(
-                    f"Column name '{new_name}' conflicts with an active metric name.",
-                    duration=3000,
-                )
-                return
+        all_current_display_names_lower = [
+            col_data["name"].lower()
+            for col_data in self.display_excel_columns
+            if col_data["id"] != self.editing_column_id
+        ]
+        if (
+            new_name.lower()
+            in all_current_display_names_lower
+        ):
+            yield rx.toast(
+                f"Column name '{new_name}' already exists or conflicts with a metric name.",
+                duration=3000,
+            )
+            return
         temp_cols = [
             col.copy() for col in self.excel_columns
         ]
@@ -846,15 +894,127 @@ class FilePrepState(rx.State):
         self.editing_column_name = ""
 
     @rx.event
-    async def confirm_columns(self):
-        from app.states.project_state import ProjectState
+    def set_new_column_input_for_group(
+        self, group: ColumnGroup, name: str
+    ):
+        self.new_column_inputs[group] = name
 
+    @rx.event
+    def add_new_column_to_group(
+        self, group_name: ColumnGroup
+    ):
+        new_col_name = self.new_column_inputs[
+            group_name
+        ].strip()
+        if not new_col_name:
+            yield rx.toast(
+                f"Please enter a name for the new column in {group_name}.",
+                duration=3000,
+            )
+            return
+        all_current_display_names_lower = [
+            col_data["name"].lower()
+            for col_data in self.display_excel_columns
+        ]
+        if (
+            new_col_name.lower()
+            in all_current_display_names_lower
+        ):
+            yield rx.toast(
+                f"Column name '{new_col_name}' already exists or conflicts with a metric.",
+                duration=3000,
+            )
+            return
+        new_column_id = f"user_col_{uuid.uuid4().hex[:8]}"
+        new_column: ExcelColumn = {
+            "name": new_col_name,
+            "id": new_column_id,
+            "group": group_name,
+            "description": "User-added column",
+            "editable_name": True,
+            "movable_within_group": True,
+            "required": False,
+            "metric_source": False,
+            "custom_user_added": True,
+            "removable": True,
+            "formula_description": None,
+            "formula_excel_style": None,
+        }
+        insert_at_index = len(self.excel_columns)
+        for i in range(len(self.excel_columns) - 1, -1, -1):
+            if self.excel_columns[i]["group"] == group_name:
+                insert_at_index = i + 1
+                break
+        temp_excel_columns = list(self.excel_columns)
+        temp_excel_columns.insert(
+            insert_at_index, new_column
+        )
+        self.excel_columns = temp_excel_columns
+        self.new_column_inputs[group_name] = ""
+        yield rx.toast(
+            f"Column '{new_col_name}' added to {group_name}.",
+            duration=2000,
+        )
+
+    @rx.event
+    def remove_column_by_id(self, column_id: str):
+        col_to_remove = next(
+            (
+                col
+                for col in self.excel_columns
+                if col["id"] == column_id
+            ),
+            None,
+        )
+        if col_to_remove and col_to_remove.get("removable"):
+            self.excel_columns = [
+                col
+                for col in self.excel_columns
+                if col["id"] != column_id
+            ]
+            yield rx.toast(
+                f"Column '{col_to_remove['name']}' removed.",
+                duration=2000,
+            )
+        elif col_to_remove:
+            yield rx.toast(
+                f"Column '{col_to_remove['name']}' cannot be removed.",
+                duration=3000,
+            )
+        else:
+            yield rx.toast(
+                f"Column with ID '{column_id}' not found.",
+                duration=3000,
+            )
+
+    @rx.event
+    def proceed_to_formula_review(self):
         if self.editing_column_id is not None:
             yield rx.toast(
                 "Please finish editing the column name first (Save or Cancel).",
                 duration=3000,
             )
             return
+        if not self.columns_with_formulas:
+            yield rx.toast(
+                "No formulas to review. Proceeding to finalize.",
+                duration=2500,
+            )
+            yield FilePrepState.finalize_column_configuration
+            return
+        self.formula_review_active = True
+        yield rx.toast(
+            "Proceeding to formula review.", duration=2000
+        )
+
+    @rx.event
+    def back_to_edit_columns_from_review(self):
+        self.formula_review_active = False
+
+    @rx.event
+    async def finalize_column_configuration(self):
+        from app.states.project_state import ProjectState
+
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
             yield rx.toast(
@@ -872,10 +1032,11 @@ class FilePrepState(rx.State):
             project_name
         ] = base_columns_to_save
         self.columns_confirmed = True
+        self.formula_review_active = False
         self.show_formula_modal = False
         self.selected_column_for_formula = None
         yield rx.toast(
-            "Excel Columns Confirmed! Configuration complete.",
+            "Excel Columns Configured! Configuration complete.",
             duration=3000,
         )
 
@@ -904,6 +1065,7 @@ class FilePrepState(rx.State):
     def _reset_downstream_of_metrics(self):
         self.columns_confirmed = False
         self._reset_column_state()
+        self.formula_review_active = False
 
     def _reset_metric_and_pass_state(self):
         self.included_evergreen_metrics = list(
@@ -926,6 +1088,9 @@ class FilePrepState(rx.State):
         self.editing_column_name = ""
         self.show_formula_modal = False
         self.selected_column_for_formula = None
+        self.new_column_inputs = {
+            group: "" for group in COLUMN_GROUPS_ORDER
+        }
 
     def _load_project_data_after_engines(
         self, project_state: "ProjectState"
@@ -1037,6 +1202,9 @@ class FilePrepState(rx.State):
             ]
         self.editing_column_id = None
         self.editing_column_name = ""
+        self.new_column_inputs = {
+            group: "" for group in COLUMN_GROUPS_ORDER
+        }
 
     @rx.event
     def reset_state(self):
@@ -1057,6 +1225,7 @@ class FilePrepState(rx.State):
         self.metrics_confirmed = False
         self._reset_column_state()
         self.columns_confirmed = False
+        self.formula_review_active = False
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
@@ -1094,6 +1263,9 @@ class FilePrepState(rx.State):
         if confirmed:
             self.show_formula_modal = False
             self.selected_column_for_formula = None
+            self.formula_review_active = False
+        elif not confirmed:
+            self.formula_review_active = False
 
     @rx.event
     def show_formula_info(self, column_id: str):
@@ -1183,7 +1355,7 @@ class FilePrepState(rx.State):
         return False
 
     @rx.var
-    def is_confirm_columns_disabled(self) -> bool:
+    def is_proceed_to_review_disabled(self) -> bool:
         return self.editing_column_id is not None
 
     @rx.var
@@ -1271,6 +1443,12 @@ class FilePrepState(rx.State):
                     "formula_excel_style": col_data.get(
                         "formula_excel_style"
                     ),
+                    "custom_user_added": col_data.get(
+                        "custom_user_added", False
+                    ),
+                    "removable": col_data.get(
+                        "removable", False
+                    ),
                     "is_first_movable_in_group": False,
                     "is_last_movable_in_group": False,
                 }
@@ -1280,7 +1458,10 @@ class FilePrepState(rx.State):
         metric_display_cols: ColumnsInGroupList = []
         for metric_info in self.all_included_metrics:
             metric_name = metric_info["name"]
-            metric_col_id = f"metric_{metric_name.lower().replace(' ', '_').replace('/', '_')}"
+            safe_metric_name = re.sub(
+                "[^a-zA-Z0-9_]", "_", metric_name.lower()
+            )
+            metric_col_id = f"metric_{safe_metric_name}"
             metric_display_cols.append(
                 ExcelColumn(
                     name=metric_name,
@@ -1291,6 +1472,8 @@ class FilePrepState(rx.State):
                     movable_within_group=False,
                     required=True,
                     metric_source=True,
+                    custom_user_added=False,
+                    removable=False,
                     is_first_movable_in_group=False,
                     is_last_movable_in_group=False,
                 )
@@ -1303,38 +1486,45 @@ class FilePrepState(rx.State):
         result_with_flags: FinalExcelDisplayType = []
         for group_name_val in COLUMN_GROUPS_ORDER:
             cols_in_group_val: ColumnsInGroupList = (
-                grouped_display_columns[group_name_val]
+                grouped_display_columns.get(
+                    group_name_val, []
+                )
             )
             processed_cols_in_group: ColumnsInGroupList = []
-            movable_indices_in_this_group = [
+            movable_indices_in_this_displayed_group = [
                 i
-                for i, c in enumerate(cols_in_group_val)
-                if c.get("movable_within_group")
+                for i, c_disp in enumerate(
+                    cols_in_group_val
+                )
+                if c_disp.get("movable_within_group")
+                and (not c_disp.get("metric_source"))
             ]
-            first_movable_idx = (
-                movable_indices_in_this_group[0]
-                if movable_indices_in_this_group
+            first_movable_disp_idx = (
+                movable_indices_in_this_displayed_group[0]
+                if movable_indices_in_this_displayed_group
                 else -1
             )
-            last_movable_idx = (
-                movable_indices_in_this_group[-1]
-                if movable_indices_in_this_group
+            last_movable_disp_idx = (
+                movable_indices_in_this_displayed_group[-1]
+                if movable_indices_in_this_displayed_group
                 else -1
             )
-            for i, col_data_item_orig in enumerate(
+            for i_disp, col_data_item_orig in enumerate(
                 cols_in_group_val
             ):
                 col_data_item = col_data_item_orig.copy()
-                is_movable = col_data_item.get(
+                is_movable_here = col_data_item.get(
                     "movable_within_group", False
+                ) and (
+                    not col_data_item.get("metric_source")
                 )
-                if is_movable:
+                if is_movable_here:
                     col_data_item[
                         "is_first_movable_in_group"
-                    ] = (i == first_movable_idx)
+                    ] = (i_disp == first_movable_disp_idx)
                     col_data_item[
                         "is_last_movable_in_group"
-                    ] = (i == last_movable_idx)
+                    ] = (i_disp == last_movable_disp_idx)
                 else:
                     col_data_item[
                         "is_first_movable_in_group"
@@ -1360,3 +1550,13 @@ class FilePrepState(rx.State):
         ) in self.final_excel_columns_for_display:
             flat_list.extend(cols_in_group)
         return flat_list
+
+    @rx.var
+    def columns_with_formulas(self) -> list[ExcelColumn]:
+        """Returns a list of columns that have defined formulas for the review page."""
+        return [
+            col
+            for col in self.display_excel_columns
+            if col.get("formula_description")
+            or col.get("formula_excel_style")
+        ]
