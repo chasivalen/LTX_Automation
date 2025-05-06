@@ -1,5 +1,5 @@
 import reflex as rx
-from typing import Optional, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 import logging
 from app.states.file_prep_state import (
     DEFAULT_README_TEXT,
@@ -9,6 +9,8 @@ from app.states.file_prep_state import (
     DEFAULT_EXCEL_COLUMNS_DATA,
 )
 
+if TYPE_CHECKING:
+    pass
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -20,8 +22,7 @@ class MetricsConfig(TypedDict):
 
 def get_default_excel_columns() -> list[ExcelColumn]:
     return [
-        ExcelColumn(**col_data)
-        for col_data in DEFAULT_EXCEL_COLUMNS_DATA
+        col.copy() for col in DEFAULT_EXCEL_COLUMNS_DATA
     ]
 
 
@@ -29,7 +30,7 @@ class ProjectState(rx.State):
     """Manages project creation, selection, and associated data for the LTX Bench flow."""
 
     projects: list[str] = ["Default Project"]
-    selected_project: Optional[str] = None
+    selected_project: str | None = None
     new_project_name: str = ""
     project_language_pairs: dict[
         str, list[tuple[str, str]]
@@ -54,7 +55,7 @@ class ProjectState(rx.State):
             metric: 5 for metric in EVERGREEN_METRICS
         }
     }
-    project_pass_threshold: dict[str, Optional[float]] = {
+    project_pass_threshold: dict[str, float | None] = {
         "Default Project": None
     }
     project_pass_definition: dict[str, str] = {
@@ -180,7 +181,7 @@ class ProjectState(rx.State):
             )
         else:
             logger.warning(
-                "Project selection failed: No project name provided."
+                "Project selection failed: No project name provided or invalid selection."
             )
 
     @rx.event
@@ -242,7 +243,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_metrics_config(
         self,
-    ) -> Optional[MetricsConfig]:
+    ) -> MetricsConfig | None:
         config = (
             self.project_included_metrics.get(
                 self.selected_project
@@ -255,7 +256,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_metric_weights(
         self,
-    ) -> Optional[dict[str, int]]:
+    ) -> dict[str, int] | None:
         weights = (
             self.project_metric_weights.get(
                 self.selected_project
@@ -268,7 +269,7 @@ class ProjectState(rx.State):
     @rx.var
     def current_project_pass_threshold(
         self,
-    ) -> Optional[float]:
+    ) -> float | None:
         return (
             self.project_pass_threshold.get(
                 self.selected_project, None
@@ -293,11 +294,11 @@ class ProjectState(rx.State):
     ) -> list[ExcelColumn]:
         """Gets the base excel columns for the current project."""
         default_cols = get_default_excel_columns()
-        cols = (
+        cols_from_project = (
             self.project_excel_columns.get(
                 self.selected_project, default_cols
             )
             if self.selected_project
             else default_cols
         )
-        return [ExcelColumn(**c) for c in cols]
+        return [c.copy() for c in cols_from_project]

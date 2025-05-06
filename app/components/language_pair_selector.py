@@ -1,11 +1,10 @@
 import reflex as rx
 from app.states.file_prep_state import FilePrepState
-from typing import Optional
 
 
 def language_select(
     placeholder: str,
-    value_var: rx.Var[Optional[str]],
+    value_var: rx.Var[str | None],
     on_change_handler: rx.EventHandler,
 ) -> rx.Component:
     """Creates a language selection dropdown."""

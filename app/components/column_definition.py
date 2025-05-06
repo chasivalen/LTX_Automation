@@ -20,7 +20,11 @@ def column_card_item(
     is_last_in_movable_group = column[
         "is_last_movable_in_group"
     ]
-    has_formula = column["formula_description"].length() > 0
+    has_formula = rx.cond(
+        column["formula_description"],
+        column["formula_description"].length() > 0,
+        False,
+    )
     return rx.el.div(
         rx.el.div(
             rx.cond(

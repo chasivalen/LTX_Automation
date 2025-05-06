@@ -1,8 +1,16 @@
 import reflex as rx
-from typing import Optional, Literal, TypedDict
+from typing import (
+    Literal,
+    TypedDict,
+    TYPE_CHECKING,
+    List,
+    Tuple,
+)
 import uuid
 import re
 
+if TYPE_CHECKING:
+    from app.states.project_state import ProjectState
 Language = Literal[
     "English",
     "Spanish",
@@ -38,15 +46,15 @@ class ExcelColumn(TypedDict, total=False):
     name: str
     id: str
     group: ColumnGroup
-    description: Optional[str]
+    description: str | None
     editable_name: bool
     movable_within_group: bool
     required: bool
     metric_source: bool
     is_first_movable_in_group: bool
     is_last_movable_in_group: bool
-    formula_description: Optional[str]
-    formula_excel_style: Optional[str]
+    formula_description: str | None
+    formula_excel_style: str | None
 
 
 class MetricInfo(TypedDict):
@@ -218,16 +226,13 @@ class FilePrepState(rx.State):
     pass_threshold: float | None = None
     pass_definition: str = ""
     excel_columns: list[ExcelColumn] = [
-        ExcelColumn(**col_data)
-        for col_data in DEFAULT_EXCEL_COLUMNS_DATA
+        col.copy() for col in DEFAULT_EXCEL_COLUMNS_DATA
     ]
     columns_confirmed: bool = False
-    editing_column_id: Optional[str] = None
+    editing_column_id: str | None = None
     editing_column_name: str = ""
     show_formula_modal: bool = False
-    selected_column_for_formula: Optional[ExcelColumn] = (
-        None
-    )
+    selected_column_for_formula: ExcelColumn | None = None
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -403,15 +408,6 @@ class FilePrepState(rx.State):
 
         self.readme_choice = choice
         project_state = await self.get_state(ProjectState)
-        saved_readme = (
-            project_state.project_readme_content.get(
-                project_state.selected_project,
-                self.default_readme,
-            )
-            if project_state
-            and project_state.selected_project
-            else self.default_readme
-        )
         if choice == "default":
             self.custom_readme_content = self.default_readme
         elif choice == "customize":
@@ -684,11 +680,11 @@ class FilePrepState(rx.State):
         )
         if saved_cols_raw:
             self.excel_columns = [
-                ExcelColumn(**col) for col in saved_cols_raw
+                col.copy() for col in saved_cols_raw
             ]
         else:
             self.excel_columns = [
-                ExcelColumn(**col)
+                col.copy()
                 for col in DEFAULT_EXCEL_COLUMNS_DATA
             ]
         self.editing_column_id = None
@@ -872,7 +868,7 @@ class FilePrepState(rx.State):
             return
         project_name = project_state.selected_project
         base_columns_to_save = [
-            ExcelColumn(**col)
+            col.copy()
             for col in self.excel_columns
             if not col.get("metric_source")
         ]
@@ -928,8 +924,7 @@ class FilePrepState(rx.State):
 
     def _reset_column_state(self):
         self.excel_columns = [
-            ExcelColumn(**col_data)
-            for col_data in DEFAULT_EXCEL_COLUMNS_DATA
+            col.copy() for col in DEFAULT_EXCEL_COLUMNS_DATA
         ]
         self.editing_column_id = None
         self.editing_column_name = ""
@@ -937,7 +932,7 @@ class FilePrepState(rx.State):
         self.selected_column_for_formula = None
 
     def _load_project_data_after_engines(
-        self, project_state
+        self, project_state: "ProjectState"
     ):
         if not project_state.selected_project:
             self._reset_downstream_of_engines()
@@ -953,17 +948,9 @@ class FilePrepState(rx.State):
             self.readme_choice = "default"
         elif not saved_readme.strip():
             self.readme_choice = "new"
+            self.custom_readme_content = ""
         else:
-            default_cleaned = re.sub(
-                "\\s+", " ", self.default_readme
-            ).strip()
-            saved_cleaned = re.sub(
-                "\\s+", " ", saved_readme
-            ).strip()
-            if saved_cleaned == default_cleaned:
-                self.readme_choice = "default"
-            else:
-                self.readme_choice = "customize"
+            self.readme_choice = "customize"
         self.stakeholder_comments = (
             project_state.project_stakeholder_comments.get(
                 project_name, ""
@@ -971,7 +958,9 @@ class FilePrepState(rx.State):
         )
         self._load_metric_pass_column_data(project_state)
 
-    def _load_metric_pass_column_data(self, project_state):
+    def _load_metric_pass_column_data(
+        self, project_state: "ProjectState"
+    ):
         if not project_state.selected_project:
             self._reset_metric_and_pass_state()
             self._reset_column_state()
@@ -1042,12 +1031,12 @@ class FilePrepState(rx.State):
         )
         if saved_base_columns_raw is not None:
             self.excel_columns = [
-                ExcelColumn(**col_data)
+                col_data.copy()
                 for col_data in saved_base_columns_raw
             ]
         else:
             self.excel_columns = [
-                ExcelColumn(**col_data)
+                col_data.copy()
                 for col_data in DEFAULT_EXCEL_COLUMNS_DATA
             ]
         self.editing_column_id = None
@@ -1113,7 +1102,7 @@ class FilePrepState(rx.State):
     @rx.event
     def show_formula_info(self, column_id: str):
         all_display_cols = self.display_excel_columns
-        found_column: Optional[ExcelColumn] = None
+        found_column: ExcelColumn | None = None
         for col in all_display_cols:
             if col["id"] == column_id:
                 found_column = col
@@ -1248,7 +1237,7 @@ class FilePrepState(rx.State):
     @rx.var
     def final_excel_columns_for_display(
         self,
-    ) -> list[tuple[ColumnGroup, list[ExcelColumn]]]:
+    ) -> List[Tuple[ColumnGroup, List[ExcelColumn]]]:
         grouped_display_columns: dict[
             ColumnGroup, list[ExcelColumn]
         ] = {group: [] for group in COLUMN_GROUPS_ORDER}
@@ -1315,14 +1304,14 @@ class FilePrepState(rx.State):
         grouped_display_columns["Metric"].extend(
             metric_display_cols
         )
-        result_with_flags: list[
-            tuple[ColumnGroup, list[ExcelColumn]]
+        result_with_flags: List[
+            Tuple[ColumnGroup, List[ExcelColumn]]
         ] = []
         for group_name_val in COLUMN_GROUPS_ORDER:
             cols_in_group_val = grouped_display_columns.get(
                 group_name_val, []
             )
-            processed_cols_in_group: list[ExcelColumn] = []
+            processed_cols_in_group: List[ExcelColumn] = []
             movable_indices_in_this_group = [
                 i
                 for i, c in enumerate(cols_in_group_val)
