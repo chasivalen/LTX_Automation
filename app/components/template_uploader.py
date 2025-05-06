@@ -96,7 +96,9 @@ def template_uploader_component() -> rx.Component:
         ),
         rx.foreach(
             FilePrepState.template_input_columns_for_upload,
-            _file_uploader_for_column,
+            lambda column_item: _file_uploader_for_column(
+                column_item
+            ),
         ),
         rx.el.div(
             rx.el.button(
