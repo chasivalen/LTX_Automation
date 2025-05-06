@@ -1,5 +1,10 @@
 import reflex as rx
-from typing import Literal, TypedDict, TYPE_CHECKING
+from typing import (
+    Literal,
+    TypedDict,
+    TYPE_CHECKING,
+    Optional,
+)
 import uuid
 import re
 
@@ -40,15 +45,15 @@ class ExcelColumn(TypedDict, total=False):
     name: str
     id: str
     group: ColumnGroup
-    description: str | None
+    description: Optional[str]
     editable_name: bool
     movable_within_group: bool
     required: bool
     metric_source: bool
     is_first_movable_in_group: bool
     is_last_movable_in_group: bool
-    formula_description: str | None
-    formula_excel_style: str | None
+    formula_description: Optional[str]
+    formula_excel_style: Optional[str]
     custom_user_added: bool
     removable: bool
 
@@ -214,8 +219,8 @@ class FilePrepState(rx.State):
         "Japanese",
         "Chinese",
     ]
-    current_source_language: Language | None = None
-    current_target_language: Language | None = None
+    current_source_language: Optional[Language] = None
+    current_target_language: Optional[Language] = None
     selected_pairs_for_session: list[tuple[str, str]] = []
     pairs_confirmed: bool = False
     available_engines: list[str] = [
@@ -225,7 +230,7 @@ class FilePrepState(rx.State):
     selected_engines: list[str] = []
     new_engine_name: str = ""
     engines_confirmed: bool = False
-    readme_choice: ReadmeChoice | None = None
+    readme_choice: Optional[ReadmeChoice] = None
     custom_readme_content: str = DEFAULT_README_TEXT
     readme_confirmed: bool = False
     default_readme: str = DEFAULT_README_TEXT
@@ -244,20 +249,26 @@ class FilePrepState(rx.State):
         metric: 5 for metric in EVERGREEN_METRICS
     }
     metrics_confirmed: bool = False
-    pass_threshold: float | None = None
+    pass_threshold: Optional[float] = None
     pass_definition: str = ""
     excel_columns: list[ExcelColumn] = [
         col.copy() for col in DEFAULT_EXCEL_COLUMNS_DATA
     ]
     columns_confirmed: bool = False
-    editing_column_id: str | None = None
+    editing_column_id: Optional[str] = None
     editing_column_name: str = ""
     show_formula_modal: bool = False
-    selected_column_for_formula: ExcelColumn | None = None
+    selected_column_for_formula: Optional[ExcelColumn] = (
+        None
+    )
     new_column_inputs: dict[ColumnGroup, str] = {
         group: "" for group in COLUMN_GROUPS_ORDER
     }
     formula_review_active: bool = False
+    editing_formula_column_id: Optional[str] = None
+    editing_formula_description_input: str = ""
+    editing_formula_excel_style_input: str = ""
+    show_formula_wizard_modal: bool = False
 
     @rx.event
     def set_current_source_language(self, lang: Language):
@@ -615,13 +626,19 @@ class FilePrepState(rx.State):
         self.metric_weights = temp_weights
 
     @rx.event
-    def set_pass_threshold(
-        self, threshold_value: float | None
-    ):
-        if threshold_value is None:
+    def set_pass_threshold(self, threshold_str: str):
+        if not threshold_str.strip():
             self.pass_threshold = None
-        else:
-            self.pass_threshold = float(threshold_value)
+            return
+        try:
+            val = float(threshold_str)
+            self.pass_threshold = val
+        except ValueError:
+            self.pass_threshold = None
+            yield rx.toast(
+                f"Invalid input '{threshold_str}'. Pass threshold set to None.",
+                duration=3000,
+            )
 
     @rx.event
     def set_pass_definition(self, definition: str):
@@ -851,9 +868,6 @@ class FilePrepState(rx.State):
             self.editing_column_name = ""
             return
         new_name = self.editing_column_name.strip()
-        original_name = self.excel_columns[idx_to_edit][
-            "name"
-        ]
         if not new_name:
             yield rx.toast(
                 "Column name cannot be empty.",
@@ -997,6 +1011,7 @@ class FilePrepState(rx.State):
             yield FilePrepState.finalize_column_configuration
             return
         self.formula_review_active = True
+        self.editing_formula_column_id = None
         yield rx.toast(
             "Proceeding to formula review.", duration=2000
         )
@@ -1004,11 +1019,18 @@ class FilePrepState(rx.State):
     @rx.event
     def back_to_edit_columns_from_review(self):
         self.formula_review_active = False
+        self.editing_formula_column_id = None
 
     @rx.event
     async def finalize_column_configuration(self):
         from app.states.project_state import ProjectState
 
+        if self.editing_formula_column_id is not None:
+            yield rx.toast(
+                "Please save or cancel your current formula edit before finalizing.",
+                duration=3500,
+            )
+            return
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
             yield rx.toast(
@@ -1029,6 +1051,7 @@ class FilePrepState(rx.State):
         self.formula_review_active = False
         self.show_formula_modal = False
         self.selected_column_for_formula = None
+        self.editing_formula_column_id = None
         yield rx.toast(
             "Excel Columns Configured! Configuration complete.",
             duration=3000,
@@ -1060,6 +1083,7 @@ class FilePrepState(rx.State):
         self.columns_confirmed = False
         self._reset_column_state()
         self.formula_review_active = False
+        self.editing_formula_column_id = None
 
     def _reset_metric_and_pass_state(self):
         self.included_evergreen_metrics = list(
@@ -1220,6 +1244,10 @@ class FilePrepState(rx.State):
         self._reset_column_state()
         self.columns_confirmed = False
         self.formula_review_active = False
+        self.editing_formula_column_id = None
+        self.editing_formula_description_input = ""
+        self.editing_formula_excel_style_input = ""
+        self.show_formula_wizard_modal = False
 
     @rx.event
     def set_pairs_confirmed(self, confirmed: bool):
@@ -1258,17 +1286,30 @@ class FilePrepState(rx.State):
             self.show_formula_modal = False
             self.selected_column_for_formula = None
             self.formula_review_active = False
+            self.editing_formula_column_id = None
         elif not confirmed:
             self.formula_review_active = False
+            self.editing_formula_column_id = None
 
     @rx.event
     def show_formula_info(self, column_id: str):
         all_display_cols = self.display_excel_columns
-        found_column: ExcelColumn | None = None
+        found_column: Optional[ExcelColumn] = None
         for col in all_display_cols:
             if col["id"] == column_id:
                 found_column = col
                 break
+        if self.editing_formula_column_id == column_id:
+            original_col_data = next(
+                (
+                    c
+                    for c in self.excel_columns
+                    if c["id"] == column_id
+                ),
+                None,
+            )
+            if original_col_data:
+                found_column = original_col_data
         if found_column and (
             found_column.get("formula_description")
             or found_column.get("formula_excel_style")
@@ -1285,6 +1326,113 @@ class FilePrepState(rx.State):
     def hide_formula_info(self):
         self.show_formula_modal = False
         self.selected_column_for_formula = None
+
+    @rx.event
+    def start_editing_formula(self, column_id: str):
+        if (
+            self.editing_formula_column_id
+            and self.editing_formula_column_id != column_id
+        ):
+            self.cancel_formula_edits()
+        col_to_edit = next(
+            (
+                c
+                for c in self.excel_columns
+                if c["id"] == column_id
+            ),
+            None,
+        )
+        if col_to_edit and (
+            col_to_edit.get("formula_description")
+            or col_to_edit.get("formula_excel_style")
+        ):
+            self.editing_formula_column_id = column_id
+            self.editing_formula_description_input = (
+                col_to_edit.get("formula_description", "")
+            )
+            self.editing_formula_excel_style_input = (
+                col_to_edit.get("formula_excel_style", "")
+            )
+        else:
+            yield rx.toast(
+                "This column does not have an editable formula.",
+                duration=3000,
+            )
+
+    @rx.event
+    def set_editing_formula_description_input(
+        self, description: str
+    ):
+        self.editing_formula_description_input = description
+
+    @rx.event
+    def set_editing_formula_excel_style_input(
+        self, excel_style: str
+    ):
+        self.editing_formula_excel_style_input = excel_style
+
+    @rx.event
+    def save_formula_edits(self):
+        if self.editing_formula_column_id is None:
+            return
+        idx = -1
+        for i, col in enumerate(self.excel_columns):
+            if col["id"] == self.editing_formula_column_id:
+                idx = i
+                break
+        if idx != -1:
+            temp_cols = [
+                c.copy() for c in self.excel_columns
+            ]
+            temp_cols[idx][
+                "formula_description"
+            ] = (
+                self.editing_formula_description_input.strip()
+            )
+            temp_cols[idx][
+                "formula_excel_style"
+            ] = (
+                self.editing_formula_excel_style_input.strip()
+            )
+            if not temp_cols[idx].get(
+                "formula_description"
+            ) and (
+                not temp_cols[idx].get(
+                    "formula_excel_style"
+                )
+            ):
+                temp_cols[idx]["formula_description"] = None
+                temp_cols[idx]["formula_excel_style"] = None
+            self.excel_columns = temp_cols
+            self.editing_formula_column_id = None
+            self.editing_formula_description_input = ""
+            self.editing_formula_excel_style_input = ""
+            yield rx.toast(
+                "Formula updated.", duration=2000
+            )
+        else:
+            yield rx.toast(
+                "Error: Could not find column to update formula.",
+                duration=3000,
+            )
+            self.editing_formula_column_id = None
+
+    @rx.event
+    def cancel_formula_edits(self):
+        self.editing_formula_column_id = None
+        self.editing_formula_description_input = ""
+        self.editing_formula_excel_style_input = ""
+
+    @rx.event
+    def open_formula_wizard(self):
+        self.show_formula_wizard_modal = True
+        yield rx.toast(
+            "Formula Wizard coming soon!", duration=3000
+        )
+
+    @rx.event
+    def close_formula_wizard(self):
+        self.show_formula_wizard_modal = False
 
     @rx.var
     def is_add_pair_disabled(self) -> bool:
