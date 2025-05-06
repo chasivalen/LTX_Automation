@@ -1,11 +1,5 @@
 import reflex as rx
-from typing import (
-    Literal,
-    TypedDict,
-    TYPE_CHECKING,
-    List,
-    Tuple,
-)
+from typing import Literal, TypedDict, TYPE_CHECKING
 import uuid
 import re
 
@@ -1237,7 +1231,7 @@ class FilePrepState(rx.State):
     @rx.var
     def final_excel_columns_for_display(
         self,
-    ) -> List[Tuple[ColumnGroup, List[ExcelColumn]]]:
+    ) -> list[tuple[ColumnGroup, list[ExcelColumn]]]:
         grouped_display_columns: dict[
             ColumnGroup, list[ExcelColumn]
         ] = {group: [] for group in COLUMN_GROUPS_ORDER}
@@ -1304,14 +1298,14 @@ class FilePrepState(rx.State):
         grouped_display_columns["Metric"].extend(
             metric_display_cols
         )
-        result_with_flags: List[
-            Tuple[ColumnGroup, List[ExcelColumn]]
+        result_with_flags: list[
+            tuple[ColumnGroup, list[ExcelColumn]]
         ] = []
         for group_name_val in COLUMN_GROUPS_ORDER:
             cols_in_group_val = grouped_display_columns.get(
                 group_name_val, []
             )
-            processed_cols_in_group: List[ExcelColumn] = []
+            processed_cols_in_group: list[ExcelColumn] = []
             movable_indices_in_this_group = [
                 i
                 for i, c in enumerate(cols_in_group_val)
