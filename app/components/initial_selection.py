@@ -6,7 +6,7 @@ def initial_selection_component() -> rx.Component:
     """Component for the initial selection between SEO and LTX Bench."""
     return rx.el.div(
         rx.el.h2(
-            "Select Your Workflow",
+            "Choose Automation",
             class_name="text-3xl font-bold text-center mb-8 text-gray-800",
         ),
         rx.el.div(
@@ -15,7 +15,7 @@ def initial_selection_component() -> rx.Component:
                 on_click=lambda: AppState.set_initial_choice(
                     "SEO"
                 ),
-                class_name="w-full px-8 py-4 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 text-xl font-semibold transition duration-150 ease-in-out",
+                class_name="w-full px-8 py-4 bg-violet-600 text-white rounded-lg shadow-md hover:bg-green-700 text-xl font-semibold transition duration-150 ease-in-out",
             ),
             rx.el.button(
                 "LTX Bench",

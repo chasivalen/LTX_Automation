@@ -53,13 +53,26 @@ def project_selection_component() -> rx.Component:
                         project, value=project
                     ),
                 ),
-                on_change=ProjectState.select_project,
+                on_change=ProjectState.set_project_choice_in_dropdown,
                 value=rx.cond(
-                    ProjectState.selected_project,
-                    ProjectState.selected_project,
+                    ProjectState.project_choice_in_dropdown,
+                    ProjectState.project_choice_in_dropdown,
                     "",
                 ),
-                class_name="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                class_name="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2",
+            ),
+            rx.el.button(
+                "Load Project Settings",
+                on_click=ProjectState.confirm_project_selection,
+                disabled=(
+                    ProjectState.project_choice_in_dropdown
+                    == None
+                )
+                | (
+                    ProjectState.project_choice_in_dropdown
+                    == ""
+                ),
+                class_name="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed",
             ),
             class_name="mb-4",
         ),

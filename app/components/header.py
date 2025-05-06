@@ -35,7 +35,7 @@ def header_component() -> rx.Component:
                     ),
                 ),
                 rx.el.span(
-                    "Select Workflow",
+                    "Select Automation",
                     class_name="text-sm font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded",
                 ),
             ),

@@ -7,7 +7,9 @@ from app.states.file_prep_state import (
     CustomMetric,
     ExcelColumn,
     DEFAULT_EXCEL_COLUMNS_DATA,
+    FilePrepState,
 )
+from app.states.app_state import AppState
 
 if TYPE_CHECKING:
     pass
@@ -32,6 +34,7 @@ class ProjectState(rx.State):
     projects: list[str] = ["Default Project"]
     selected_project: str | None = None
     new_project_name: str = ""
+    project_choice_in_dropdown: str | None = None
     project_language_pairs: dict[
         str, list[tuple[str, str]]
     ] = {"Default Project": []}
@@ -106,9 +109,6 @@ class ProjectState(rx.State):
     @rx.event
     async def create_project(self):
         """Creates a new project, selects it, initializes data, and notifies AppState."""
-        from app.states.app_state import AppState
-        from app.states.file_prep_state import FilePrepState
-
         project_name = self.new_project_name.strip()
         logger.info(
             f"Attempting to create project: {project_name}"
@@ -123,6 +123,7 @@ class ProjectState(rx.State):
             self.selected_project = project_name
             self._initialize_project_data(project_name)
             self.new_project_name = ""
+            self.project_choice_in_dropdown = project_name
             logger.info(
                 f"Project '{project_name}' added to state."
             )
@@ -133,7 +134,7 @@ class ProjectState(rx.State):
             yield FilePrepState.reset_state
             logger.info("Yielded FilePrepState.reset_state")
             yield rx.toast(
-                f"Project '{project_name}' created.",
+                f"Project '{project_name}' created and loaded.",
                 duration=3000,
             )
             logger.info("Project creation toast yielded.")
@@ -149,39 +150,60 @@ class ProjectState(rx.State):
             yield rx.toast(error_msg, duration=4000)
 
     @rx.event
-    async def select_project(self, project_name: str):
-        """Selects an existing project, ensures data exists, notifies AppState, and resets FilePrepState."""
-        from app.states.app_state import AppState
-        from app.states.file_prep_state import FilePrepState
+    def set_project_choice_in_dropdown(
+        self, project_name: str
+    ):
+        """Sets the project choice from the dropdown."""
+        if project_name == "":
+            self.project_choice_in_dropdown = None
+        else:
+            self.project_choice_in_dropdown = project_name
 
-        logger.info(
-            f"Attempting to select project: {project_name}"
-        )
-        if project_name and project_name in self.projects:
-            self.selected_project = project_name
-            logger.info(
-                f"Project '{project_name}' selected in state."
+    @rx.event
+    async def confirm_project_selection(self):
+        """Confirms the selected project, loads its data, and updates AppState."""
+        if (
+            self.project_choice_in_dropdown
+            and self.project_choice_in_dropdown
+            in self.projects
+        ):
+            self.selected_project = (
+                self.project_choice_in_dropdown
             )
-            self._initialize_project_data(project_name)
+            logger.info(
+                f"Project '{self.selected_project}' confirmed and selected in state."
+            )
+            self._initialize_project_data(
+                self.selected_project
+            )
             yield AppState.set_project_selected(True)
             logger.info(
-                "Yielded AppState.set_project_selected(True) for project selection."
+                "Yielded AppState.set_project_selected(True) for project confirmation."
             )
             yield FilePrepState.reset_state
             logger.info(
-                "Yielded FilePrepState.reset_state for project selection."
-            )
-        elif project_name:
-            logger.warning(
-                f"Project selection failed: Project '{project_name}' not found."
+                "Yielded FilePrepState.reset_state for project confirmation."
             )
             yield rx.toast(
-                f"Error: Project '{project_name}' not found.",
+                f"Project '{self.selected_project}' settings loaded.",
+                duration=3000,
+            )
+        elif self.project_choice_in_dropdown:
+            logger.warning(
+                f"Project confirmation failed: Project '{self.project_choice_in_dropdown}' not found in known projects."
+            )
+            yield rx.toast(
+                f"Error: Project '{self.project_choice_in_dropdown}' not found.",
                 duration=4000,
             )
+            self.project_choice_in_dropdown = None
         else:
             logger.warning(
-                "Project selection failed: No project name provided or invalid selection."
+                "Project confirmation failed: No project choice made."
+            )
+            yield rx.toast(
+                "Please select a project from the dropdown first.",
+                duration=3000,
             )
 
     @rx.event
