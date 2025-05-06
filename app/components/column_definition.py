@@ -70,7 +70,7 @@ def _column_item_component(
                 col_data.get("editable_name", False)
                 & ~is_editing_this_column_name,
                 _icon_button(
-                    "copy",
+                    "pencil",
                     lambda: FilePrepState.start_editing_column_name(
                         cast(str, col_data["id"])
                     ),
@@ -84,11 +84,11 @@ def _column_item_component(
                     "is_first_movable_in_group", False
                 ),
                 _icon_button(
-                    "arrow-left",
+                    "arrow-up",
                     lambda: FilePrepState.move_column(
                         cast(str, col_data["id"]), "left"
                     ),
-                    "Move Left",
+                    "Move Up",
                 ),
                 rx.el.div(class_name="w-7 h-7"),
             ),
@@ -98,11 +98,11 @@ def _column_item_component(
                     "is_last_movable_in_group", False
                 ),
                 _icon_button(
-                    "arrow-right",
+                    "arrow-down",
                     lambda: FilePrepState.move_column(
                         cast(str, col_data["id"]), "right"
                     ),
-                    "Move Right",
+                    "Move Down",
                 ),
                 rx.el.div(class_name="w-7 h-7"),
             ),
@@ -110,7 +110,7 @@ def _column_item_component(
                 col_data.get("formula_description")
                 | col_data.get("formula_excel_style"),
                 _icon_button(
-                    "square_m",
+                    "square-sigma",
                     lambda: FilePrepState.show_formula_info(
                         cast(str, col_data["id"])
                     ),
@@ -121,11 +121,11 @@ def _column_item_component(
             rx.cond(
                 col_data.get("removable", False),
                 _icon_button(
-                    "trash-2",
+                    "square-x",
                     lambda: FilePrepState.remove_column_by_id(
                         cast(str, col_data["id"])
                     ),
-                    "Remove Column",
+                    "Remove Field",
                     extra_class_name="text-red-500 hover:text-red-700",
                 ),
                 rx.fragment(),
@@ -188,7 +188,7 @@ def _column_editor_view() -> rx.Component:
     """View for editing the main column structure."""
     return rx.el.div(
         rx.el.p(
-            "Arrange, rename, add, or remove columns for your evaluation template. Metric columns are automatically added based on your selections in the previous step.",
+            "Use the columns below to map out your evaluation. The metrics are defined from your selections in the previous step. You will have the chance to review Excel formulas after this step.",
             class_name="text-sm text-gray-600 mb-4",
         ),
         rx.foreach(
@@ -317,7 +317,7 @@ def _formula_review_item_component(
                     class_name="text-sm text-gray-700 font-mono",
                 ),
                 _icon_button(
-                    "copy",
+                    "square-sigma",
                     lambda: FilePrepState.start_editing_formula(
                         cast(str, col_data["id"])
                     ),
