@@ -4,6 +4,7 @@ from typing import (
     TypedDict,
     TYPE_CHECKING,
     Optional,
+    Union,
 )
 import uuid
 import re
@@ -249,7 +250,7 @@ class FilePrepState(rx.State):
         metric: 5 for metric in EVERGREEN_METRICS
     }
     metrics_confirmed: bool = False
-    pass_threshold: Optional[float] = None
+    pass_threshold: float | None = None
     pass_definition: str = ""
     excel_columns: list[ExcelColumn] = [
         col.copy() for col in DEFAULT_EXCEL_COLUMNS_DATA
@@ -626,19 +627,12 @@ class FilePrepState(rx.State):
         self.metric_weights = temp_weights
 
     @rx.event
-    def set_pass_threshold(self, threshold_str: str):
-        if not threshold_str.strip():
-            self.pass_threshold = None
-            return
-        try:
-            val = float(threshold_str)
-            self.pass_threshold = val
-        except ValueError:
-            self.pass_threshold = None
-            yield rx.toast(
-                f"Invalid input '{threshold_str}'. Pass threshold set to None.",
-                duration=3000,
-            )
+    def set_pass_threshold(self, value: float | None):
+        """Sets the pass threshold.
+        'value' is expected to be a float if the input is a valid number from type="number" input,
+        or None if the input is empty or invalid.
+        """
+        self.pass_threshold = value
 
     @rx.event
     def set_pass_definition(self, definition: str):

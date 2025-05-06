@@ -70,7 +70,7 @@ def _column_item_component(
                 col_data.get("editable_name", False)
                 & ~is_editing_this_column_name,
                 _icon_button(
-                    "share_2",
+                    "copy",
                     lambda: FilePrepState.start_editing_column_name(
                         cast(str, col_data["id"])
                     ),
@@ -317,7 +317,7 @@ def _formula_review_item_component(
                     class_name="text-sm text-gray-700 font-mono",
                 ),
                 _icon_button(
-                    "share_2",
+                    "copy",
                     lambda: FilePrepState.start_editing_formula(
                         cast(str, col_data["id"])
                     ),
