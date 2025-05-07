@@ -35,91 +35,103 @@ def _column_item_component(
     )
     return rx.el.div(
         rx.el.div(
-            rx.cond(
-                is_editing_this_column_name,
-                rx.el.div(
-                    rx.el.input(
-                        default_value=FilePrepState.editing_column_name,
-                        on_change=FilePrepState.set_editing_column_name,
-                        placeholder="Column Name",
-                        class_name="flex-grow p-1 border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
+            rx.el.div(
+                rx.cond(
+                    is_editing_this_column_name,
+                    rx.el.div(
+                        rx.el.input(
+                            default_value=FilePrepState.editing_column_name,
+                            on_change=FilePrepState.set_editing_column_name,
+                            placeholder="Column Name",
+                            class_name="flex-grow p-1 border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
+                        ),
+                        _icon_button(
+                            "check",
+                            FilePrepState.save_column_name,
+                            "Save Name",
+                            extra_class_name="ml-1 text-green-600 hover:text-green-700",
+                        ),
+                        _icon_button(
+                            "x",
+                            FilePrepState.cancel_editing_column_name,
+                            "Cancel Edit",
+                            extra_class_name="text-red-600 hover:text-red-700",
+                        ),
+                        class_name="flex items-center w-full",
                     ),
-                    _icon_button(
-                        "check",
-                        FilePrepState.save_column_name,
-                        "Save Name",
-                        extra_class_name="ml-1 text-green-600 hover:text-green-700",
+                    rx.el.span(
+                        col_data["name"],
+                        class_name="font-medium text-gray-800",
                     ),
-                    _icon_button(
-                        "x",
-                        FilePrepState.cancel_editing_column_name,
-                        "Cancel Edit",
-                        extra_class_name="text-red-600 hover:text-red-700",
-                    ),
-                    class_name="flex items-center w-full",
                 ),
-                rx.el.span(
-                    col_data["name"],
-                    class_name="font-medium text-gray-800",
-                ),
+                class_name="flex-grow min-w-0 pr-2",
             ),
-            class_name="flex-grow min-w-0 pr-2",
+            rx.el.div(
+                rx.cond(
+                    col_data.get("editable_name", False)
+                    & ~is_editing_this_column_name,
+                    _icon_button(
+                        "pencil",
+                        lambda: FilePrepState.start_editing_column_name(
+                            cast(str, col_data["id"])
+                        ),
+                        "Edit Name",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    col_data.get(
+                        "movable_within_group", False
+                    )
+                    & ~col_data.get(
+                        "is_first_movable_in_group", False
+                    ),
+                    _icon_button(
+                        "arrow-up",
+                        lambda: FilePrepState.move_column(
+                            cast(str, col_data["id"]),
+                            "left",
+                        ),
+                        "Move Up",
+                    ),
+                    rx.el.div(class_name="w-7 h-7"),
+                ),
+                rx.cond(
+                    col_data.get(
+                        "movable_within_group", False
+                    )
+                    & ~col_data.get(
+                        "is_last_movable_in_group", False
+                    ),
+                    _icon_button(
+                        "arrow-down",
+                        lambda: FilePrepState.move_column(
+                            cast(str, col_data["id"]),
+                            "right",
+                        ),
+                        "Move Down",
+                    ),
+                    rx.el.div(class_name="w-7 h-7"),
+                ),
+                class_name="flex items-center space-x-1 flex-shrink-0",
+            ),
+            class_name="flex justify-between items-center p-2",
         ),
-        rx.el.div(
-            rx.cond(
-                col_data.get("editable_name", False)
-                & ~is_editing_this_column_name,
-                _icon_button(
-                    "pencil",
-                    lambda: FilePrepState.start_editing_column_name(
-                        cast(str, col_data["id"])
-                    ),
-                    "Edit Name",
+        rx.cond(
+            col_data.get("formula_description")
+            | col_data.get("formula_excel_style"),
+            rx.el.div(
+                rx.el.span(
+                    "Formula",
+                    class_name="bg-blue-500 text-white text-xs px-2 py-1 rounded",
                 ),
-                rx.fragment(),
+                class_name="px-2 pt-1 pb-1",
             ),
-            rx.cond(
-                col_data.get("movable_within_group", False)
-                & ~col_data.get(
-                    "is_first_movable_in_group", False
-                ),
-                _icon_button(
-                    "arrow-up",
-                    lambda: FilePrepState.move_column(
-                        cast(str, col_data["id"]), "left"
-                    ),
-                    "Move Up",
-                ),
-                rx.el.div(class_name="w-7 h-7"),
-            ),
-            rx.cond(
-                col_data.get("movable_within_group", False)
-                & ~col_data.get(
-                    "is_last_movable_in_group", False
-                ),
-                _icon_button(
-                    "arrow-down",
-                    lambda: FilePrepState.move_column(
-                        cast(str, col_data["id"]), "right"
-                    ),
-                    "Move Down",
-                ),
-                rx.el.div(class_name="w-7 h-7"),
-            ),
-            rx.cond(
-                col_data.get("formula_description")
-                | col_data.get("formula_excel_style"),
-                _icon_button(
-                    "square_sigma",
-                    lambda: FilePrepState.show_formula_info(
-                        cast(str, col_data["id"])
-                    ),
-                    "View Formula",
-                ),
-                rx.fragment(),
-            ),
-            rx.cond(
-                col_data.get("removable", False),
+            rx.fragment(),
+        ),
+        rx.cond(
+            col_data.get("removable", False),
+            rx.el.div(
                 _icon_button(
                     "square-x",
                     lambda: FilePrepState.remove_column_by_id(
@@ -128,11 +140,11 @@ def _column_item_component(
                     "Remove Column",
                     extra_class_name="text-red-500 hover:text-red-700",
                 ),
-                rx.fragment(),
+                class_name="flex justify-end mt-2 px-2 pb-2",
             ),
-            class_name="flex items-center space-x-1 flex-shrink-0",
+            rx.fragment(),
         ),
-        class_name="flex justify-between items-center p-2 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 text-sm",
+        class_name="border-b border-gray-200 last:border-b-0 hover:bg-gray-50 text-sm",
     )
 
 
