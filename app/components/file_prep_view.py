@@ -243,7 +243,7 @@ def mt_project_view() -> rx.Component:
                                                                         class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
                                                                     ),
                                                                     rx.el.div(
-                                                                        rx.markdown(
+                                                                        rx.html(
                                                                             FilePrepState.final_readme_content
                                                                         ),
                                                                         class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2",

@@ -2,7 +2,7 @@ import reflex as rx
 from typing import TYPE_CHECKING, TypedDict
 import logging
 from app.states.file_prep_state import (
-    DEFAULT_README_TEXT,
+    DEFAULT_README_HTML,
     EVERGREEN_METRICS,
     CustomMetric,
     ExcelColumn,
@@ -42,7 +42,7 @@ class ProjectState(rx.State):
         "Default Project": []
     }
     project_readme_content: dict[str, str] = {
-        "Default Project": DEFAULT_README_TEXT
+        "Default Project": DEFAULT_README_HTML
     }
     project_stakeholder_comments: dict[str, str] = {
         "Default Project": ""
@@ -76,7 +76,7 @@ class ProjectState(rx.State):
             self.project_mt_engines[project_name] = []
         if project_name not in self.project_readme_content:
             self.project_readme_content[project_name] = (
-                DEFAULT_README_TEXT
+                DEFAULT_README_HTML
             )
         if (
             project_name
@@ -246,10 +246,10 @@ class ProjectState(rx.State):
     def current_project_readme(self) -> str:
         return (
             self.project_readme_content.get(
-                self.selected_project, DEFAULT_README_TEXT
+                self.selected_project, DEFAULT_README_HTML
             )
             if self.selected_project
-            else DEFAULT_README_TEXT
+            else DEFAULT_README_HTML
         )
 
     @rx.var

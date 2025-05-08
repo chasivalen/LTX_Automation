@@ -1,4 +1,5 @@
 import reflex as rx
+from reflex_quill import QuillEditor
 from app.states.file_prep_state import (
     FilePrepState,
     ReadmeChoice,
@@ -28,7 +29,13 @@ def readme_choice_radio(
 
 
 def readme_customizer_component() -> rx.Component:
-    """Component for customizing the Read Me instructions."""
+    """Component for customizing the Read Me instructions using a Rich Text Editor."""
+    toolbar_options = [
+        ["bold", "italic", "underline"],
+        [{"list": "ordered"}, {"list": "bullet"}],
+        [{"color": []}, {"background": []}],
+        ["clean"],
+    ]
     return rx.el.div(
         rx.el.h4(
             "Customize Evaluator Instructions (Read Me)",
@@ -40,7 +47,7 @@ def readme_customizer_component() -> rx.Component:
                 class_name="cursor-pointer font-medium text-blue-600 hover:text-blue-800 mb-2 outline-none focus:ring-2 focus:ring-blue-300 rounded px-1",
             ),
             rx.el.div(
-                rx.markdown(FilePrepState.default_readme),
+                rx.html(FilePrepState.default_readme),
                 class_name="prose prose-sm max-w-none p-3 border border-gray-200 rounded bg-gray-50 max-h-60 overflow-y-auto mt-2",
             ),
             class_name="mb-6",
@@ -73,36 +80,32 @@ def readme_customizer_component() -> rx.Component:
                 "customize",
                 rx.el.div(
                     rx.el.h5(
-                        "Edit Instructions (Markdown Supported):",
+                        "Edit Instructions:",
                         class_name="text-lg font-medium mb-2 text-gray-600",
                     ),
-                    rx.el.textarea(
-                        default_value=FilePrepState.custom_readme_content,
-                        on_change=FilePrepState.set_custom_readme_content.debounce(
-                            300
-                        ),
-                        placeholder="Enter markdown content here...",
-                        class_name="w-full p-2 border border-gray-300 rounded shadow-sm min-h-[300px] focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    QuillEditor.create(
+                        value=FilePrepState.custom_readme_content,
+                        on_change=FilePrepState.set_custom_readme_content,
+                        toolbar=toolbar_options,
+                        class_name="h-[300px] border border-gray-300 rounded shadow-sm quill-container",
                     ),
-                    class_name="mb-6",
+                    class_name="mb-6 min-h-[350px]",
                 ),
             ),
             (
                 "new",
                 rx.el.div(
                     rx.el.h5(
-                        "Create New Instructions (Markdown Supported):",
+                        "Create New Instructions:",
                         class_name="text-lg font-medium mb-2 text-gray-600",
                     ),
-                    rx.el.textarea(
-                        default_value=FilePrepState.custom_readme_content,
-                        on_change=FilePrepState.set_custom_readme_content.debounce(
-                            300
-                        ),
-                        placeholder="Enter markdown content here...",
-                        class_name="w-full p-2 border border-gray-300 rounded shadow-sm min-h-[300px] focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    QuillEditor.create(
+                        value=FilePrepState.custom_readme_content,
+                        on_change=FilePrepState.set_custom_readme_content,
+                        toolbar=toolbar_options,
+                        class_name="h-[300px] border border-gray-300 rounded shadow-sm quill-container",
                     ),
-                    class_name="mb-6",
+                    class_name="mb-6 min-h-[350px]",
                 ),
             ),
             rx.fragment(),
