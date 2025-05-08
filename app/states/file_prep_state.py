@@ -30,12 +30,11 @@ ReadmeChoice = Literal["default", "customize", "new"]
 ColumnGroup = Literal[
     "Input",
     "Pre-Evaluation",
-    "Metric",
+    "Scoring",
     "Calculated Score",
     "Freeform",
 ]
 DEFAULT_README_TEXT = "1. Please read through READ ME tab before you kick off the Evaluation Task:\na. Check out the Metrics and their corresponding Definitions & Notes to understand what aspects of the language performance you are evaluating against;\nb. Check out the Scoring Definition section to understand how you should be scoring each segment from a range of 1 to 5;\nc. The Weights/Percentage section is for your reference as to how much each metric is valued for this specific project.\n\n2. Once you are done reading through the READ ME tab, please move on to the Part 1 tabs to start the actual evaluation task. \n\n3. Pre-Eval: Before you start evaluating a segment, please take a quick look at both the SOURCE and TARGET columns, and:\na.If you find the source quality of a segment in SOURCE Column too terrible to understand, please choose Incomprehensible Input from the dropdown list of Pre-Eval column and skip the evaluation of this segment;\nb. If you find that the content in TARGET Column is not the translation of source, please choose Irrelevant Target from the dropdown list and score 0.9 under every metric for this segment.\n\n4. If you don't see a big issue with either the SOURCE or TARGET, please start evaluating the segment from TARGET column\na. First give an overall score (1 to 5) for the whole segment under the \"Overall\" Column;\nb. Then evaluate per metric with a scoring range from 1 to 5;\nc. Metrics are divided into “Evergreen” and “Customized”, so please make sure to score all of them;\nd. Please score each metric based on the overall performance in this aspect according to the scoring definition; \ne. If a translation issue has an impact on more than one metric, please penalize it accordingly in multiple metrics as needed.\n\n5. Overall Rating will be automatically calculated with pre-filled formulas in both non-weighted and weighted forms, so please don’t touch any of the RATING Columns.\n\n6. If you have any comments for the segment, you could leave them under the Additional Notes Column\n\n7. After completing the rating work for Part 1, please review the entire section again to check for any cells with a yellow background. If a cell has a yellow background, it's possible that you have either forgotten to add a rating or entered an invalid rating value.\n\n8. With the evaluation done, all relevant data will be automatically pulled to Part 2 - Data Analysis tab for data analysis in both numbers and visuals formats, and comparison will be available if evaluation is done on multiple tools.\n\n9. Based on data displayed in Part 2 - Data Analysis tab, please provide your take on the performance of each tool included in the Data Analysis Summary at the top of the tab, and make sure to answer all questions listed to be thorough.\n\n10. In Part 3 - Criteria Based Assess tab, please provide comments to questions regarding criteria specific to the project and your overall summary for you locale, so that the Project Lead can incorporate your opinions into the final Report.\n\n11. Once you are done with the whole process, please rename your file by adding the Completion Date and Your name.\n"
-
 EVERGREEN_METRICS: dict[str, str] = {
     "Accuracy": "Source information is misinterpreted for the target translation, Numbers mismatch, Acronym mismatch.",
     "Omission/Addition": "Part of a segment missing or left in English, unnecessary/irrelevant information added to the target translation.",
@@ -65,6 +64,9 @@ class ExcelColumn(TypedDict, total=False):
     custom_user_added: bool
     removable: bool
     allow_file_upload: Optional[bool]
+    metric_type: Optional[
+        Literal["evergreen", "custom", "overall_predefined"]
+    ]
 
 
 class MetricInfo(TypedDict):
@@ -165,7 +167,7 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
     {
         "name": "Overall",
         "id": "overall",
-        "group": "Metric",
+        "group": "Scoring",
         "description": "The overall score determined by the linguist evaluating.",
         "editable_name": True,
         "movable_within_group": True,
@@ -218,7 +220,7 @@ DEFAULT_EXCEL_COLUMNS_DATA: list[ExcelColumn] = [
 COLUMN_GROUPS_ORDER: list[ColumnGroup] = [
     "Input",
     "Pre-Evaluation",
-    "Metric",
+    "Scoring",
     "Calculated Score",
     "Freeform",
 ]
@@ -389,7 +391,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_language_pairs(self):
-        from ltx_automation_2.states.project_state import ProjectState
+        from app.states.project_state import ProjectState
 
         if not self.selected_pairs_for_session:
             yield rx.toast(
@@ -463,7 +465,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_engines(self):
-        from ltx_automation_2.states.project_state import ProjectState
+        from app.states.project_state import ProjectState
 
         if not self.selected_engines:
             yield rx.toast(
@@ -518,7 +520,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_readme(self):
-        from ltx_automation_2.states.project_state import ProjectState
+        from app.states.project_state import ProjectState
 
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
@@ -557,7 +559,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_stakeholder_perspective(self):
-        from ltx_automation_2.states.project_state import ProjectState
+        from app.states.project_state import ProjectState
 
         project_state = await self.get_state(ProjectState)
         if not project_state.selected_project:
@@ -703,7 +705,7 @@ class FilePrepState(rx.State):
 
     @rx.event
     async def confirm_metrics(self):
-        from ltx_automation_2.states.project_state import ProjectState
+        from app.states.project_state import ProjectState
 
         missing_weights = []
         for metric in self.all_included_metrics:
@@ -1077,7 +1079,7 @@ class FilePrepState(rx.State):
             success is True if saved, False otherwise.
             error_message contains a message if success is False.
         """
-        from ltx_automation_2.states.project_state import ProjectState
+        from app.states.project_state import ProjectState
 
         if self.editing_formula_column_id is not None:
             return (
@@ -1881,12 +1883,18 @@ class FilePrepState(rx.State):
                     "removable": col_data.get(
                         "removable", False
                     ),
-                    "is_first_movable_in_group": False,
-                    "is_last_movable_in_group": False,
                     "allow_file_upload": col_data.get(
                         "allow_file_upload", False
                     ),
+                    "metric_type": None,
                 }
+                if (
+                    full_col_data["group"] == "Scoring"
+                    and full_col_data["id"] == "overall"
+                ):
+                    full_col_data["metric_type"] = (
+                        "overall_predefined"
+                    )
                 grouped_display_columns[group].append(
                     full_col_data
                 )
@@ -1897,11 +1905,21 @@ class FilePrepState(rx.State):
                 "[^a-zA-Z0-9_]", "_", metric_name.lower()
             )
             metric_col_id = f"metric_{safe_metric_name}"
+            current_metric_type: Literal[
+                "evergreen", "custom"
+            ]
+            if (
+                metric_name
+                in self.evergreen_metrics_definitions
+            ):
+                current_metric_type = "evergreen"
+            else:
+                current_metric_type = "custom"
             metric_display_cols.append(
                 ExcelColumn(
                     name=metric_name,
                     id=metric_col_id,
-                    group="Metric",
+                    group="Scoring",
                     description=metric_info["definition"],
                     editable_name=False,
                     movable_within_group=False,
@@ -1909,14 +1927,12 @@ class FilePrepState(rx.State):
                     metric_source=True,
                     custom_user_added=False,
                     removable=False,
-                    is_first_movable_in_group=False,
-                    is_last_movable_in_group=False,
-                    allow_file_upload=False,
+                    metric_type=current_metric_type,
                 )
             )
-        if "Metric" not in grouped_display_columns:
-            grouped_display_columns["Metric"] = []
-        grouped_display_columns["Metric"].extend(
+        if "Scoring" not in grouped_display_columns:
+            grouped_display_columns["Scoring"] = []
+        grouped_display_columns["Scoring"].extend(
             metric_display_cols
         )
         result_with_flags: FinalExcelDisplayType = []

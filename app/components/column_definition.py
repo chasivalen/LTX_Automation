@@ -96,6 +96,35 @@ def _column_item_component(
                     ),
                     rx.fragment(),
                 ),
+                rx.cond(
+                    col_data.get("group") == "Scoring",
+                    rx.el.div(
+                        rx.cond(
+                            col_data.get("metric_type")
+                            == "evergreen",
+                            rx.badge(
+                                "Evergreen",
+                                color_scheme="green",
+                                variant="surface",
+                                class_name="mt-1 text-xs",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            col_data.get("metric_type")
+                            == "custom",
+                            rx.badge(
+                                "Custom",
+                                color_scheme="purple",
+                                variant="surface",
+                                class_name="mt-1 text-xs",
+                            ),
+                            rx.fragment(),
+                        ),
+                        class_name="flex space-x-1 items-center pt-0.5",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="flex flex-col items-start flex-grow min-w-0 pr-2",
             ),
             rx.el.div(
@@ -174,7 +203,7 @@ def _column_group_component(
             class_name="border border-gray-200 rounded bg-white shadow-sm",
         ),
         rx.cond(
-            group_name != "Metric",
+            group_name != "Scoring",
             rx.el.div(
                 rx.el.input(
                     placeholder=f"Add new column to {group_name}",
@@ -205,7 +234,7 @@ def _column_editor_view() -> rx.Component:
     """View for editing the main column structure."""
     return rx.el.div(
         rx.el.p(
-            "Arrange, rename, add, or remove columns for your evaluation template. Metric columns are automatically added based on your selections in the previous step.",
+            "Arrange, rename, add, or remove columns for your evaluation template. Scoring columns (metrics) are automatically added based on your selections in the previous step.",
             class_name="text-sm text-gray-600 mb-4",
         ),
         rx.foreach(
