@@ -1,18 +1,23 @@
 import reflex as rx
-from typing import TYPE_CHECKING, TypedDict
+from typing import (
+    TYPE_CHECKING,
+    TypedDict,
+    List,
+    Dict,
+    Optional,
+)
 import logging
-from app.states.file_prep_state import (
+from .file_prep_state import (
     DEFAULT_README_HTML,
     EVERGREEN_METRICS,
     CustomMetric,
     ExcelColumn,
     DEFAULT_EXCEL_COLUMNS_DATA,
-    FilePrepState,
 )
-from app.states.app_state import AppState
+from .app_state import AppState
 
 if TYPE_CHECKING:
-    pass
+    from .file_prep_state import FilePrepState
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -67,6 +72,11 @@ class ProjectState(rx.State):
     project_excel_columns: dict[str, list[ExcelColumn]] = {
         "Default Project": get_default_excel_columns()
     }
+
+    async def _get_file_prep_state(self) -> "FilePrepState":
+        from .file_prep_state import FilePrepState
+
+        return await self.get_state(FilePrepState)
 
     def _initialize_project_data(self, project_name: str):
         """Initializes all data structures for a newly created project."""
@@ -131,7 +141,8 @@ class ProjectState(rx.State):
             logger.info(
                 "Yielded AppState.set_project_selected(True)"
             )
-            yield FilePrepState.reset_state
+            file_prep_s = await self._get_file_prep_state()
+            yield file_prep_s.reset_state
             logger.info("Yielded FilePrepState.reset_state")
             yield rx.toast(
                 f"Project '{project_name}' created and loaded.",
@@ -180,7 +191,8 @@ class ProjectState(rx.State):
             logger.info(
                 "Yielded AppState.set_project_selected(True) for project confirmation."
             )
-            yield FilePrepState.reset_state
+            file_prep_s = await self._get_file_prep_state()
+            yield file_prep_s.reset_state
             logger.info(
                 "Yielded FilePrepState.reset_state for project confirmation."
             )
@@ -279,14 +291,20 @@ class ProjectState(rx.State):
     def current_project_metric_weights(
         self,
     ) -> dict[str, int] | None:
-        weights = (
+        weights_with_optional_none = (
             self.project_metric_weights.get(
                 self.selected_project
             )
             if self.selected_project
             else None
         )
-        return weights.copy() if weights else None
+        if weights_with_optional_none:
+            return {
+                k: v
+                for k, v in weights_with_optional_none.items()
+                if isinstance(v, int)
+            }.copy()
+        return None
 
     @rx.var
     def current_project_pass_threshold(
@@ -314,7 +332,7 @@ class ProjectState(rx.State):
     def current_project_excel_columns(
         self,
     ) -> list[ExcelColumn]:
-        """Gets the base excel columns for the current project."""
+        """Gets the base excel columns for the current project. Returns copies."""
         default_cols = get_default_excel_columns()
         cols_from_project = (
             self.project_excel_columns.get(

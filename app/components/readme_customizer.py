@@ -1,5 +1,4 @@
 import reflex as rx
-from reflex_quill import QuillEditor
 from app.states.file_prep_state import (
     FilePrepState,
     ReadmeChoice,
@@ -29,13 +28,7 @@ def readme_choice_radio(
 
 
 def readme_customizer_component() -> rx.Component:
-    """Component for customizing the Read Me instructions using a Rich Text Editor."""
-    toolbar_options = [
-        ["bold", "italic", "underline"],
-        [{"list": "ordered"}, {"list": "bullet"}],
-        [{"color": []}, {"background": []}],
-        ["clean"],
-    ]
+    """Component for customizing the Read Me instructions."""
     return rx.el.div(
         rx.el.h4(
             "Customize Evaluator Instructions (Read Me)",
@@ -83,11 +76,15 @@ def readme_customizer_component() -> rx.Component:
                         "Edit Instructions:",
                         class_name="text-lg font-medium mb-2 text-gray-600",
                     ),
-                    QuillEditor.create(
-                        value=FilePrepState.custom_readme_content,
+                    rx.el.textarea(
+                        default_value=FilePrepState.custom_readme_content,
                         on_change=FilePrepState.set_custom_readme_content,
-                        toolbar=toolbar_options,
-                        class_name="h-[300px] border border-gray-300 rounded shadow-sm quill-container",
+                        placeholder="Enter your custom Read Me instructions here. You can use basic HTML for formatting.",
+                        class_name="w-full h-[300px] p-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    ),
+                    rx.el.p(
+                        "Tip: You can use basic HTML tags like <b>, <i>, <ul>, <li> for formatting.",
+                        class_name="text-xs text-gray-500 mt-1",
                     ),
                     class_name="mb-6 min-h-[350px]",
                 ),
@@ -99,11 +96,15 @@ def readme_customizer_component() -> rx.Component:
                         "Create New Instructions:",
                         class_name="text-lg font-medium mb-2 text-gray-600",
                     ),
-                    QuillEditor.create(
-                        value=FilePrepState.custom_readme_content,
+                    rx.el.textarea(
+                        default_value=FilePrepState.custom_readme_content,
                         on_change=FilePrepState.set_custom_readme_content,
-                        toolbar=toolbar_options,
-                        class_name="h-[300px] border border-gray-300 rounded shadow-sm quill-container",
+                        placeholder="Enter your new Read Me instructions here. You can use basic HTML for formatting.",
+                        class_name="w-full h-[300px] p-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    ),
+                    rx.el.p(
+                        "Tip: You can use basic HTML tags like <b>, <i>, <ul>, <li> for formatting.",
+                        class_name="text-xs text-gray-500 mt-1",
                     ),
                     class_name="mb-6 min-h-[350px]",
                 ),
