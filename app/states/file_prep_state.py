@@ -40,4 +40,4 @@ ColumnGroup = Literal[
     "Freeform",
 ]
 
-DEFAULT_README_HTML = """
+DEFAULT_README_HTML = ""
